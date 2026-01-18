@@ -28,7 +28,16 @@ export default async function Home() {
               EXAM<span className="font-light text-slate-500">SYSTEM</span>
             </span>
           </div>
-          <div className="text-sm text-slate-500">Administrator Portal</div>
+          <div className="flex items-center gap-4 text-sm text-slate-500">
+            <Clock size={16} />
+            <span>
+              {new Date().toLocaleDateString("en-US", {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+              })}
+            </span>
+          </div>
         </div>
       </header>
 

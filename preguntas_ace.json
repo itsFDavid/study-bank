@@ -1,0 +1,134 @@
+[
+  {
+    "questionText": "Acabas de crear un objeto Secret en Kubernetes para guardar una contraseña. Un hacker logra entrar a tu cluster y descarga el YAML. En el campo data ve una cadena rara. ¿Puede leer la contraseña?",
+    "options": [
+      "No, porque Kubernetes encripta los secretos con algoritmos militares AES-256 por defecto.",
+      "Sí, porque Kubernetes solo los codifica en Base64 (que es reversible fácilmente), no los encripta por defecto.",
+      "No, necesita la llave privada del cluster para decodificarlo.",
+      "Sí, pero solo si tiene permisos de Root en el nodo."
+    ],
+    "answers": [
+      "Sí, porque Kubernetes solo los codifica en Base64 (que es reversible fácilmente), no los encripta por defecto."
+    ]
+  },
+  {
+    "questionText": "Estás creando un Deployment. En la sección 'spec.selector.matchLabels' pones 'app: tienda', pero en 'spec.template.metadata.labels' pones 'app: almacen'. ¿Qué pasará al aplicar el YAML?",
+    "options": [
+      "Se crearán los pods correctamente pero tendrán otra etiqueta.",
+      "Kubernetes lanzará un error de validación diciendo que el selector no coincide con las etiquetas del template.",
+      "Se creará un Deployment Zombie que generará pods infinitos.",
+      "Kubernetes corregirá automáticamente la etiqueta para que coincidan."
+    ],
+    "answers": [
+      "Kubernetes lanzará un error de validación diciendo que el selector no coincide con las etiquetas del template."
+    ]
+  },
+  {
+    "questionText": "Si un Pod supera el límite de Memoria RAM (Limits) configurado en el YAML, ¿qué acción toma Kubernetes?",
+    "options": [
+      "Comprime la memoria para que quepa en el límite (Throttling).",
+      "Mueve el pod a otro nodo con más RAM.",
+      "Ignora el límite si hay espacio libre en el nodo.",
+      "Mata el contenedor inmediatamente (OOMKilled)."
+    ],
+    "answers": [
+      "Mata el contenedor inmediatamente (OOMKilled)."
+    ]
+  },
+  {
+    "questionText": "Tienes una regla de firewall en GCP que permite el tráfico de ENTRADA (Ingress) al puerto 80. Un usuario entra a tu web. ¿Necesitas crear una regla de SALIDA (Egress) explícita para que el servidor pueda responder?",
+    "options": [
+      "Sí, siempre hay que configurar entrada y salida explícitamente en cualquier nube.",
+      "No, los firewalls de GCP son 'Stateful' (con estado) y permiten la respuesta automáticamente.",
+      "Sí, pero solo si el tráfico es UDP.",
+      "No, porque el tráfico de salida está permitido por defecto solo para el puerto 80."
+    ],
+    "answers": [
+      "No, los firewalls de GCP son 'Stateful' (con estado) y permiten la respuesta automáticamente."
+    ]
+  },
+  {
+    "questionText": "Estás configurando IAM. Quieres que 'Ana' pueda ver las máquinas virtuales del 'Proyecto-A', pero que NO pueda ver otros recursos en la carpeta 'Desarrollo'. ¿Cuál es la mejor práctica?",
+    "options": [
+      "Darle el rol 'Owner' a nivel de Proyecto-A.",
+      "Darle el rol 'Compute Viewer' a nivel de la Carpeta Desarrollo.",
+      "Darle el rol 'Compute Viewer' a nivel del Proyecto-A.",
+      "Darle el rol 'Viewer' (Básico) a nivel del Proyecto-A."
+    ],
+    "answers": [
+      "Darle el rol 'Compute Viewer' a nivel del Proyecto-A."
+    ]
+  },
+  {
+    "questionText": "Necesitas conectar una base de datos en una subred de 'us-central1' con un servidor en 'asia-east1' usando IPs privadas dentro de la misma VPC. ¿Qué necesitas configurar?",
+    "options": [
+      "Una Cloud VPN entre las regiones.",
+      "VPC Network Peering.",
+      "Nada. En GCP las VPC son globales y las subredes se ven automáticamente.",
+      "Un Global Load Balancer."
+    ],
+    "answers": [
+      "Nada. En GCP las VPC son globales y las subredes se ven automáticamente."
+    ]
+  },
+  {
+    "questionText": "Tienes logs de aplicaciones que debes guardar por auditoría legal durante 5 años. Los primeros 15 días se consultan mucho para depurar errores, luego casi nunca. ¿Cuál es la estrategia de costos más eficiente?",
+    "options": [
+      "Crear el bucket en clase Archive desde el día 1.",
+      "Crear en Standard. Regla de ciclo de vida: mover a Nearline a los 15 días y a Archive al año.",
+      "Crear en Standard. Regla de ciclo de vida: mover a Archive a los 15 días.",
+      "Crear en Coldline y mover a Archive a los 5 años."
+    ],
+    "answers": [
+      "Crear en Standard. Regla de ciclo de vida: mover a Archive a los 15 días."
+    ]
+  },
+  {
+    "questionText": "Tienes un proceso 'Batch' que procesa imágenes. Tarda 5 horas, pero si se interrumpe puede reiniciarse sin perder datos. Quieres ahorrar el máximo dinero posible. ¿Qué tipo de máquina usas?",
+    "options": [
+      "E2-Standard.",
+      "Spot VMs (o Preemptible).",
+      "N2-HighCpu.",
+      "C2-Compute Optimized."
+    ],
+    "answers": [
+      "Spot VMs (o Preemptible)."
+    ]
+  },
+  {
+    "questionText": "¿Cuál es el comando correcto para crear un nuevo cluster de Kubernetes (GKE) en Google Cloud desde la terminal?",
+    "options": [
+      "kubectl create cluster mi-cluster --zone us-central1-a",
+      "gcloud container clusters create mi-cluster --zone us-central1-a",
+      "gcloud kubernetes create cluster mi-cluster --zone us-central1-a",
+      "kubectl apply -f cluster.yaml"
+    ],
+    "answers": [
+      "gcloud container clusters create mi-cluster --zone us-central1-a"
+    ]
+  },
+  {
+    "questionText": "Una aplicación en una VM necesita leer archivos de un Cloud Storage Bucket privado. ¿Cuál es la forma MÁS segura de dar acceso?",
+    "options": [
+      "Crear una Service Account, descargar la key JSON y ponerla en el código.",
+      "Hacer el bucket público (allUsers) con rol Viewer.",
+      "Loguearte con 'gcloud auth login' en la VM con tu cuenta personal.",
+      "Crear una Service Account y vincularla (attach) a la configuración de la VM."
+    ],
+    "answers": [
+      "Crear una Service Account y vincularla (attach) a la configuración de la VM."
+    ]
+  },
+  {
+    "questionText": "Tienes dos VPCs en proyectos diferentes (Principal y Startup). Necesitas que se comuniquen por IP Privada con la MÁXIMA velocidad de red posible y sin salir a internet. ¿Qué usas?",
+    "options": [
+      "Cloud VPN.",
+      "VPC Network Peering.",
+      "Reglas de Firewall permitiendo las IPs públicas.",
+      "Cloud Interconnect."
+    ],
+    "answers": [
+      "VPC Network Peering."
+    ]
+  }
+]

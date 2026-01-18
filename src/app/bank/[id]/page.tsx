@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/prisma";
-import FlashCard from "@/components/FlashCard";
-import CreateQuestionForm from "@/components/CreateQuestionForm";
+import QuestionForm from "@/components/QuestionForm"; // Renombrado
+import QuestionItem from "@/components/QuestionItem"; // Nuevo
+import DeleteBankButton from "@/components/DeleteBankButton"; // Nuevo
 import Link from "next/link";
-import { ArrowLeft, Play, ChevronRight, LayoutGrid } from "lucide-react";
+import { ArrowLeft, Play, LayoutGrid } from "lucide-react";
 import { notFound } from "next/navigation";
 
 export default async function BankPage({
@@ -37,7 +38,7 @@ export default async function BankPage({
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
-      {/* Strict Header */}
+      {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
         <div className="max-w-7xl mx-auto px-6 h-16 flex justify-between items-center">
           <div className="flex items-center gap-4">
@@ -52,14 +53,20 @@ export default async function BankPage({
               {bank.title}
             </h1>
           </div>
-          {totalQuestions > 0 && (
-            <Link
-              href={`/bank/${bank.id}/quiz`}
-              className="bg-blue-900 hover:bg-blue-800 text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm flex items-center gap-2 transition-all"
-            >
-              <Play size={14} fill="currentColor" /> Start Examination
-            </Link>
-          )}
+
+          <div className="flex items-center gap-4">
+            {/* BOTÓN DE BORRAR BANCO */}
+            <DeleteBankButton bankId={bank.id} />
+
+            {totalQuestions > 0 && (
+              <Link
+                href={`/bank/${bank.id}/quiz`}
+                className="bg-blue-900 hover:bg-blue-800 text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm flex items-center gap-2 transition-all"
+              >
+                <Play size={14} fill="currentColor" /> Start Examination
+              </Link>
+            )}
+          </div>
         </div>
       </header>
 
@@ -67,7 +74,8 @@ export default async function BankPage({
         {/* LEFT COLUMN: Input Form (Sticky) */}
         <div className="lg:col-span-4 order-2 lg:order-1">
           <div className="sticky top-24">
-            <CreateQuestionForm bankId={bank.id} />
+            {/* Usamos el formulario para crear */}
+            <QuestionForm bankId={bank.id} />
           </div>
         </div>
 
@@ -87,14 +95,13 @@ export default async function BankPage({
           <div className="space-y-4">
             {bank.questions.length > 0 ? (
               bank.questions.map((q, index) => (
-                <div key={q.id} className="relative pl-8">
-                  <span className="absolute left-0 top-6 text-xs font-bold text-slate-400 w-6 text-right">
-                    {totalQuestions - (skip + index)}.
-                  </span>
-                  <FlashCard
-                    question={q.questionText}
-                    answers={q.answers}
-                    options={q.options}
+                <div key={q.id}>
+                  {/* Usamos QuestionItem que incluye los botones de editar/borrar */}
+                  <QuestionItem
+                    question={q}
+                    bankId={bank.id}
+                    index={skip + index}
+                    total={totalQuestions}
                   />
                 </div>
               ))
@@ -108,7 +115,7 @@ export default async function BankPage({
             )}
           </div>
 
-          {/* Pagination Controls - Minimalist */}
+          {/* Pagination Controls */}
           {totalPages > 1 && (
             <div className="mt-8 flex justify-center gap-2">
               {currentPage > 1 ? (
