@@ -1,17 +1,13 @@
 # nixpacks.toml
 
-# 1. Indicamos que queremos los paquetes de Node y OpenSSL (necesario para Prisma)
 [phases.setup]
 nixPkgs = ["nodejs", "openssl"]
 
-# 2. Forzamos la instalación con NPM
 [phases.install]
 cmds = ["npm install"]
 
-# 3. Forzamos el build con NPM y generamos el cliente de Prisma
 [phases.build]
 cmds = ["npx prisma generate", "npm run build"]
 
-# 4. Arrancamos con NPM
-[phases.start]
-cmds = ["npm run start"]
+# IMPORTANTE: startCmd va fuera de las fases, al nivel raíz
+startCmd = "npm run start"
