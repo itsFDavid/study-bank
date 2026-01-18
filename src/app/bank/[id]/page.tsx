@@ -1,9 +1,9 @@
 import { prisma } from "@/lib/prisma";
-import QuestionForm from "@/components/QuestionForm"; // Renombrado
-import QuestionItem from "@/components/QuestionItem"; // Nuevo
-import DeleteBankButton from "@/components/DeleteBankButton"; // Nuevo
+import QuestionForm from "@/components/QuestionForm";
+import QuestionItem from "@/components/QuestionItem";
+import DeleteBankButton from "@/components/DeleteBankButton";
 import Link from "next/link";
-import { ArrowLeft, Play, LayoutGrid } from "lucide-react";
+import { ArrowLeft, Play, LayoutGrid, AlertTriangle } from "lucide-react";
 import { notFound } from "next/navigation";
 
 export default async function BankPage({
@@ -49,21 +49,25 @@ export default async function BankPage({
               <ArrowLeft size={16} /> Back
             </Link>
             <div className="h-6 w-px bg-slate-200" />
-            <h1 className="text-lg font-bold text-slate-900 uppercase tracking-wide">
+            <h1 className="text-lg font-bold text-slate-900 uppercase tracking-wide truncate max-w-[150px] md:max-w-md">
               {bank.title}
             </h1>
           </div>
 
           <div className="flex items-center gap-4">
-            {/* BOTÓN DE BORRAR BANCO */}
-            <DeleteBankButton bankId={bank.id} />
+            {/* CAMBIO 1: Ocultar en móvil (hidden), mostrar en desktop (md:block) */}
+            <div className="hidden md:block">
+              <DeleteBankButton bankId={bank.id} />
+            </div>
 
             {totalQuestions > 0 && (
               <Link
                 href={`/bank/${bank.id}/quiz`}
-                className="bg-blue-900 hover:bg-blue-800 text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm flex items-center gap-2 transition-all"
+                className="bg-blue-900 hover:bg-blue-800 text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm flex items-center gap-2 transition-all whitespace-nowrap"
               >
-                <Play size={14} fill="currentColor" /> Start Examination
+                <Play size={14} fill="currentColor" />
+                <span className="hidden sm:inline">Start Examination</span>
+                <span className="sm:hidden">Start</span>
               </Link>
             )}
           </div>
@@ -73,9 +77,20 @@ export default async function BankPage({
       <div className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* LEFT COLUMN: Input Form (Sticky) */}
         <div className="lg:col-span-4 order-2 lg:order-1">
-          <div className="sticky top-24">
-            {/* Usamos el formulario para crear */}
+          <div className="sticky top-24 space-y-6">
+            {/* Formulario de Crear */}
             <QuestionForm bankId={bank.id} />
+
+            {/* CAMBIO 2: Sección "Danger Zone" visible SOLO en móvil para no perder la función */}
+            <div className="md:hidden bg-white rounded-lg border border-rose-100 p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-rose-700 font-medium text-sm">
+                  <AlertTriangle size={16} />
+                  <span>Danger Zone</span>
+                </div>
+                <DeleteBankButton bankId={bank.id} />
+              </div>
+            </div>
           </div>
         </div>
 
