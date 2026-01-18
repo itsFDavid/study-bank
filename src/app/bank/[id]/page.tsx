@@ -55,7 +55,7 @@ export default async function BankPage({
           </div>
 
           <div className="flex items-center gap-4">
-            {/* CAMBIO 1: Ocultar en móvil (hidden), mostrar en desktop (md:block) */}
+            {/* Ocultar en móvil, mostrar en desktop */}
             <div className="hidden md:block">
               <DeleteBankButton bankId={bank.id} />
             </div>
@@ -75,13 +75,16 @@ export default async function BankPage({
       </header>
 
       <div className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* LEFT COLUMN: Input Form (Sticky) */}
-        <div className="lg:col-span-4 order-2 lg:order-1">
+        {/* LEFT COLUMN: Input Form (Sticky)
+            CAMBIO: Eliminé 'order-2 lg:order-1'. 
+            Al estar primero en el HTML, por defecto saldrá arriba en móvil.
+        */}
+        <div className="lg:col-span-4">
           <div className="sticky top-24 space-y-6">
             {/* Formulario de Crear */}
             <QuestionForm bankId={bank.id} />
 
-            {/* CAMBIO 2: Sección "Danger Zone" visible SOLO en móvil para no perder la función */}
+            {/* Sección Danger Zone solo visible en móvil */}
             <div className="md:hidden bg-white rounded-lg border border-rose-100 p-4 shadow-sm">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-rose-700 font-medium text-sm">
@@ -94,8 +97,9 @@ export default async function BankPage({
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Question List */}
-        <div className="lg:col-span-8 order-1">
+        {/* RIGHT COLUMN: Question List
+         */}
+        <div className="lg:col-span-8">
           <div className="flex items-baseline justify-between mb-6 pb-2 border-b border-slate-200">
             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
               <LayoutGrid size={18} className="text-slate-400" />
@@ -111,7 +115,6 @@ export default async function BankPage({
             {bank.questions.length > 0 ? (
               bank.questions.map((q, index) => (
                 <div key={q.id}>
-                  {/* Usamos QuestionItem que incluye los botones de editar/borrar */}
                   <QuestionItem
                     question={q}
                     bankId={bank.id}

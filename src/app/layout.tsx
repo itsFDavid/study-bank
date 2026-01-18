@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
+// Icono
+export const icon = "/icon.heic";
+
+// Metadata for SEO and social sharing
 export const metadata: Metadata = {
   title: "Study Bank",
   description: "Create, manage, and quiz yourself with custom question banks.",
@@ -41,7 +45,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es">
+    <html lang="en">
       <body>{children}</body>
     </html>
   );
