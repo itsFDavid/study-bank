@@ -2,31 +2,22 @@ import { prisma } from "@/lib/prisma";
 import FlashCard from "@/components/FlashCard";
 import CreateQuestionForm from "@/components/CreateQuestionForm";
 import Link from "next/link";
-import {
-  ArrowLeft,
-  Layers,
-  PlayCircle,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { ArrowLeft, Play, ChevronRight, LayoutGrid } from "lucide-react";
 import { notFound } from "next/navigation";
 
-interface PageProps {
+export default async function BankPage({
+  params,
+  searchParams,
+}: {
   params: { id: string };
-  searchParams: { page?: string }; // Añadimos searchParams para la paginación
-}
-
-export default async function BankPage({ params, searchParams }: PageProps) {
-  // 1. Manejo de parámetros asíncronos (Next.js moderno)
+  searchParams: { page?: string };
+}) {
   const { id } = await params;
   const { page } = await searchParams;
-
-  // 2. Configuración de paginación
   const currentPage = Number(page) || 1;
-  const PAGE_SIZE = 10; // Cantidad de preguntas por página
+  const PAGE_SIZE = 10;
   const skip = (currentPage - 1) * PAGE_SIZE;
 
-  // 3. Consultas a la base de datos en paralelo (Datos del banco + Preguntas paginadas + Conteo total)
   const [bank, totalQuestions] = await Promise.all([
     prisma.bank.findUnique({
       where: { id },
@@ -38,95 +29,68 @@ export default async function BankPage({ params, searchParams }: PageProps) {
         },
       },
     }),
-    prisma.question.count({
-      where: { bankId: id },
-    }),
+    prisma.question.count({ where: { bankId: id } }),
   ]);
 
   if (!bank) notFound();
-
   const totalPages = Math.ceil(totalQuestions / PAGE_SIZE);
-  const hasNextPage = currentPage < totalPages;
-  const hasPrevPage = currentPage > 1;
 
   return (
-    <div className="min-h-screen bg-gray-50/50 font-sans pb-32">
-      {/* HEADER DECORATIVO SUPERIOR */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-5xl mx-auto px-6 py-4">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="flex items-center gap-4 w-full md:w-auto">
-              <Link
-                href="/"
-                className="p-2 hover:bg-gray-100 rounded-full text-gray-500 transition-colors"
-                title="Volver"
-              >
-                <ArrowLeft size={20} />
-              </Link>
+    <div className="min-h-screen bg-slate-50 font-sans">
+      {/* Strict Header */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <Link
+              href="/"
+              className="text-slate-500 hover:text-slate-900 transition-colors flex items-center gap-1 text-sm font-medium"
+            >
+              <ArrowLeft size={16} /> Back
+            </Link>
+            <div className="h-6 w-px bg-slate-200" />
+            <h1 className="text-lg font-bold text-slate-900 uppercase tracking-wide">
+              {bank.title}
+            </h1>
+          </div>
+          {totalQuestions > 0 && (
+            <Link
+              href={`/bank/${bank.id}/quiz`}
+              className="bg-blue-900 hover:bg-blue-800 text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm flex items-center gap-2 transition-all"
+            >
+              <Play size={14} fill="currentColor" /> Start Examination
+            </Link>
+          )}
+        </div>
+      </header>
 
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
-                  <Layers size={20} />
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold text-gray-900 leading-none">
-                    {bank.title}
-                  </h1>
-                  <p className="text-xs text-gray-500 mt-1 font-medium">
-                    {totalQuestions} preguntas en total
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* BOTÓN MODO EXAMEN */}
-            {totalQuestions > 0 && (
-              <Link
-                href={`/bank/${bank.id}/quiz`}
-                className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold text-sm shadow-md shadow-indigo-200 transition-all flex items-center justify-center gap-2"
-              >
-                <PlayCircle size={18} />
-                Practicar Ahora
-              </Link>
-            )}
+      <div className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* LEFT COLUMN: Input Form (Sticky) */}
+        <div className="lg:col-span-4 order-2 lg:order-1">
+          <div className="sticky top-24">
+            <CreateQuestionForm bankId={bank.id} />
           </div>
         </div>
-      </div>
 
-      <div className="max-w-3xl mx-auto p-6 md:p-8 space-y-10">
-        {/* SECCIÓN 1: FORMULARIO DE CREACIÓN (RECTÁNGULO SUPERIOR) */}
-        <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 md:p-8">
-          <div className="mb-6 pb-4 border-b border-gray-100">
-            <h2 className="text-lg font-bold text-gray-800">
-              Añadir nueva pregunta
+        {/* RIGHT COLUMN: Question List */}
+        <div className="lg:col-span-8 order-1 lg:order-2">
+          <div className="flex items-baseline justify-between mb-6 pb-2 border-b border-slate-200">
+            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <LayoutGrid size={18} className="text-slate-400" />
+              Item Bank
             </h2>
-            <p className="text-sm text-gray-500">
-              Crea una tarjeta de estudio para este banco.
-            </p>
-          </div>
-          {/* Aquí renderizamos tu formulario existente, asegurando que ocupe el ancho disponible */}
-          <CreateQuestionForm bankId={bank.id} />
-        </section>
-
-        {/* SECCIÓN 2: LISTADO DE PREGUNTAS */}
-        <section>
-          <div className="flex justify-between items-end mb-6">
-            <h2 className="text-lg font-bold text-gray-700">
-              Banco de Preguntas
-              <span className="ml-2 text-sm font-normal text-gray-400">
-                (Página {currentPage} de {totalPages || 1})
-              </span>
-            </h2>
+            <span className="text-xs font-mono text-slate-500">
+              Showing {skip + 1}-{Math.min(skip + PAGE_SIZE, totalQuestions)} of{" "}
+              {totalQuestions}
+            </span>
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-4">
             {bank.questions.length > 0 ? (
               bank.questions.map((q, index) => (
-                <div key={q.id} className="relative group">
-                  {/* Número de pregunta discreto a la izquierda (opcional) */}
-                  <div className="absolute -left-8 top-6 text-xs text-gray-300 font-bold hidden md:block">
-                    #{totalQuestions - (skip + index)}
-                  </div>
+                <div key={q.id} className="relative pl-8">
+                  <span className="absolute left-0 top-6 text-xs font-bold text-slate-400 w-6 text-right">
+                    {totalQuestions - (skip + index)}.
+                  </span>
                   <FlashCard
                     question={q.questionText}
                     answers={q.answers}
@@ -135,61 +99,50 @@ export default async function BankPage({ params, searchParams }: PageProps) {
                 </div>
               ))
             ) : (
-              <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200">
-                <div className="mx-auto w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4 text-gray-300">
-                  <Layers size={32} />
-                </div>
-                <h3 className="text-gray-900 font-medium">
-                  Aún no hay preguntas
-                </h3>
-                <p className="text-gray-400 text-sm mt-1">
-                  Utiliza el formulario de arriba para comenzar.
+              <div className="bg-white border border-dashed border-slate-300 rounded-lg p-12 text-center">
+                <p className="text-slate-500">Repository is empty.</p>
+                <p className="text-sm text-slate-400 mt-1">
+                  Use the form to define examination items.
                 </p>
               </div>
             )}
           </div>
 
-          {/* CONTROLES DE PAGINACIÓN */}
-          {totalQuestions > 0 && (
-            <div className="mt-10 flex justify-center items-center gap-4">
-              {hasPrevPage ? (
+          {/* Pagination Controls - Minimalist */}
+          {totalPages > 1 && (
+            <div className="mt-8 flex justify-center gap-2">
+              {currentPage > 1 ? (
                 <Link
-                  href={`/bank/${id}?page=${currentPage - 1}`}
-                  className="flex items-center gap-1 px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all text-sm font-medium"
+                  href={`?page=${currentPage - 1}`}
+                  className="px-3 py-1 bg-white border border-slate-300 text-sm rounded hover:bg-slate-50"
                 >
-                  <ChevronLeft size={16} /> Anterior
+                  Prev
                 </Link>
               ) : (
-                <button
-                  disabled
-                  className="flex items-center gap-1 px-4 py-2 bg-gray-100 border border-transparent text-gray-400 rounded-lg cursor-not-allowed text-sm font-medium"
-                >
-                  <ChevronLeft size={16} /> Anterior
-                </button>
+                <span className="px-3 py-1 text-slate-300 border border-slate-100 text-sm rounded">
+                  Prev
+                </span>
               )}
 
-              <span className="text-sm font-medium text-gray-500">
+              <span className="px-3 py-1 text-sm text-slate-600 font-medium">
                 {currentPage} / {totalPages}
               </span>
 
-              {hasNextPage ? (
+              {currentPage < totalPages ? (
                 <Link
-                  href={`/bank/${id}?page=${currentPage + 1}`}
-                  className="flex items-center gap-1 px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all text-sm font-medium"
+                  href={`?page=${currentPage + 1}`}
+                  className="px-3 py-1 bg-white border border-slate-300 text-sm rounded hover:bg-slate-50"
                 >
-                  Siguiente <ChevronRight size={16} />
+                  Next
                 </Link>
               ) : (
-                <button
-                  disabled
-                  className="flex items-center gap-1 px-4 py-2 bg-gray-100 border border-transparent text-gray-400 rounded-lg cursor-not-allowed text-sm font-medium"
-                >
-                  Siguiente <ChevronRight size={16} />
-                </button>
+                <span className="px-3 py-1 text-slate-300 border border-slate-100 text-sm rounded">
+                  Next
+                </span>
               )}
             </div>
           )}
-        </section>
+        </div>
       </div>
     </div>
   );

@@ -1,22 +1,25 @@
 "use client";
 
-import { useState, useRef } from "react"; // 1. Importamos useRef
-import { Plus, Trash2, CheckSquare, Square, Save } from "lucide-react";
+import { useState, useRef } from "react";
+import { Plus, X, CheckSquare, Square, Save, AlertCircle } from "lucide-react";
 import { addQuestion } from "@/app/actions";
 import { cn } from "@/lib/utils";
 
 export default function CreateQuestionForm({ bankId }: { bankId: string }) {
-  // 2. Creamos una referencia al formulario HTML para poder resetear inputs no controlados (como el textarea)
   const formRef = useRef<HTMLFormElement>(null);
-
   const [options, setOptions] = useState(["", ""]);
   const [correctIndices, setCorrectIndices] = useState<number[]>([]);
-  // Estado de carga opcional para mejor UX
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [errorMessages, setErrorMessages] = useState<string[] | null>(null);
 
-  const addOption = () => setOptions([...options, ""]);
+  const addOption = () => {
+    if (options.length >= 8) return;
+    setOptions([...options, ""]);
+  };
 
   const removeOption = (index: number) => {
+    if (options.length <= 2) return;
     const newOptions = options.filter((_, i) => i !== index);
     setOptions(newOptions);
     setCorrectIndices((prev) =>
@@ -31,76 +34,110 @@ export default function CreateQuestionForm({ bankId }: { bankId: string }) {
   };
 
   const toggleCorrect = (index: number) => {
-    setCorrectIndices((prev) => {
-      if (prev.includes(index)) {
-        return prev.filter((i) => i !== index);
-      } else {
-        return [...prev, index];
-      }
-    });
+    setCorrectIndices((prev) =>
+      prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index],
+    );
   };
 
-  // 3. ESTA ES LA CLAVE: Una función intermedia
   async function handleSubmit(formData: FormData) {
     setIsSubmitting(true);
+    setErrorMessages(null);
 
     try {
-      // a) Llamamos a tu Server Action real
-      await addQuestion(formData);
+      // 1. Llamamos a la acción y ESPERAMOS el resultado
+      const result = await addQuestion(formData);
 
-      // b) Si todo salió bien, reseteamos el estado visual de React
+      // 2. Verificamos si la lógica de negocio falló (ej: validación Zod)
+      if (!result.success) {
+        // Si hay detalles de Zod (errores por campo), los extraemos
+        if (result.details) {
+          const messages: string[] = [];
+          // result.details es un objeto { question: [...], options: [...] }
+          Object.values(result.details).forEach((errArray: any) => {
+            messages.push(...errArray);
+          });
+          setErrorMessages(messages);
+        } else {
+          // Si es un error genérico
+          setErrorMessages([result.error as string]);
+        }
+        return; // Detenemos la ejecución aquí, no reseteamos el form
+      }
+
+      // 3. Éxito: Reseteamos el formulario
       setOptions(["", ""]);
       setCorrectIndices([]);
-
-      // c) Reseteamos el formulario HTML (esto limpia el textarea del enunciado)
       formRef.current?.reset();
-    } catch (error) {
-      console.error("Error al guardar:", error);
-      // Aquí podrías poner un toast de error si quisieras
+    } catch (err) {
+      // 4. Error de red o crash del sistema
+      setErrorMessages([
+        "System failure: Unable to commit record to database.",
+      ]);
     } finally {
       setIsSubmitting(false);
     }
   }
 
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
-      <div className="flex items-center gap-2 mb-6 border-b pb-4">
-        <h3 className="text-xl font-bold text-gray-800">Nueva Pregunta</h3>
-        <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full font-medium">
-          Multi-Opción
+    <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+      <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
+        <h3 className="font-semibold text-slate-800 text-sm uppercase tracking-wider">
+          Define New Item
+        </h3>
+        <span className="text-[10px] font-bold bg-blue-100 text-blue-900 px-2 py-0.5 rounded border border-blue-200">
+          MULTIPLE CHOICE
         </span>
       </div>
 
-      {/* 4. Conectamos la ref y cambiamos la action por nuestro handleSubmit */}
-      <form ref={formRef} action={handleSubmit} className="flex flex-col gap-6">
+      <form ref={formRef} action={handleSubmit} className="p-6 space-y-6">
         <input type="hidden" name="bankId" value={bankId} />
-
         {correctIndices.map((idx) => (
           <input key={idx} type="hidden" name="correctIndices" value={idx} />
         ))}
 
-        <div className="flex flex-col gap-2">
-          <label className="text-sm font-bold text-gray-700 uppercase">
-            Enunciado
+        {errorMessages && errorMessages.length > 0 && (
+          <div className="bg-rose-50 border-l-4 border-rose-700 p-4 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="flex gap-3">
+              <AlertCircle
+                className="text-rose-700 flex-shrink-0 mt-0.5 justify-center items-center"
+                size={18}
+              />
+              <div className="flex-1">
+                <h4 className="text-sm font-bold text-rose-900 mb-1">
+                  Submission Failed
+                </h4>
+                <ul className="list-disc list-inside text-xs text-rose-800 space-y-1">
+                  {errorMessages.map((msg, i) => (
+                    <li key={i}>{msg}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <label className="block text-xs font-bold text-slate-500 uppercase">
+            Question Stem
           </label>
           <textarea
             name="question"
             required
-            rows={8}
-            className="w-full bg-gray-50 border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 outline-none resize-y whitespace-pre-wrap font-medium"
-            placeholder={
-              "Escribe aquí tu pregunta...\nPuedes dar Enter para separar párrafos.\n\nEjemplo:\nContexto...\n\n¿Pregunta?"
-            }
+            rows={4}
+            className="w-full text-sm p-3 border border-slate-300 rounded-md focus:ring-1 focus:ring-blue-900 focus:border-blue-900 outline-none resize-y min-h-[100px]"
+            placeholder="Enter the examination question text..."
           />
         </div>
 
-        <div className="flex flex-col gap-3">
-          <label className="text-sm font-bold text-gray-700 uppercase flex justify-between items-center">
-            Respuestas
-            <span className="text-xs font-normal text-indigo-600 bg-indigo-50 px-2 py-1 rounded">
-              Marca todas las correctas
+        <div className="space-y-3">
+          <div className="flex justify-between items-end">
+            <label className="block text-xs font-bold text-slate-500 uppercase">
+              Response Options
+            </label>
+            <span className="text-[10px] text-slate-400">
+              Select checkboxes to mark correct answers
             </span>
-          </label>
+          </div>
 
           {options.map((opt, index) => {
             const isSelected = correctIndices.includes(index);
@@ -110,40 +147,40 @@ export default function CreateQuestionForm({ bankId }: { bankId: string }) {
                   type="button"
                   onClick={() => toggleCorrect(index)}
                   className={cn(
-                    "flex-shrink-0 w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-all",
+                    "flex-shrink-0 w-5 h-5 rounded border transition-colors flex items-center justify-center",
                     isSelected
-                      ? "border-green-500 bg-green-500 text-white"
-                      : "border-gray-300 text-gray-300 hover:border-gray-400",
+                      ? "bg-emerald-700 border-emerald-700 text-white"
+                      : "bg-white border-slate-300 text-transparent hover:border-slate-400",
                   )}
                 >
-                  {isSelected ? (
-                    <CheckSquare size={18} />
-                  ) : (
-                    <Square size={18} />
-                  )}
+                  <CheckSquare size={14} />
                 </button>
 
-                <input
-                  name="options"
-                  value={opt}
-                  onChange={(e) => handleOptionChange(index, e.target.value)}
-                  required
-                  placeholder={`Opción ${index + 1}`}
-                  className={cn(
-                    "flex-grow border rounded-lg p-3 outline-none transition-all",
-                    isSelected
-                      ? "border-green-500 ring-1 ring-green-500 bg-green-50/20"
-                      : "border-gray-300 focus:border-indigo-500 bg-white",
-                  )}
-                />
+                <div className="flex-grow relative">
+                  <span className="absolute left-3 top-2.5 text-xs font-mono text-slate-400">
+                    {String.fromCharCode(65 + index)}.
+                  </span>
+                  <input
+                    name="options"
+                    value={opt}
+                    onChange={(e) => handleOptionChange(index, e.target.value)}
+                    required
+                    className={cn(
+                      "w-full text-sm pl-8 pr-3 py-2 border rounded-md focus:outline-none transition-colors",
+                      isSelected
+                        ? "border-emerald-600 bg-emerald-50/10"
+                        : "border-slate-300 focus:border-blue-900",
+                    )}
+                  />
+                </div>
 
                 {options.length > 2 && (
                   <button
                     type="button"
                     onClick={() => removeOption(index)}
-                    className="text-gray-400 hover:text-red-500 p-2"
+                    className="text-slate-300 hover:text-rose-700 transition-colors"
                   >
-                    <Trash2 size={18} />
+                    <X size={16} />
                   </button>
                 )}
               </div>
@@ -153,25 +190,28 @@ export default function CreateQuestionForm({ bankId }: { bankId: string }) {
           <button
             type="button"
             onClick={addOption}
-            className="self-start text-sm text-indigo-600 font-medium flex items-center gap-1 mt-2 px-2 py-1 hover:bg-indigo-50 rounded"
+            disabled={options.length >= 8}
+            className="text-xs font-bold text-blue-900 hover:text-blue-700 flex items-center gap-1 mt-2 disabled:opacity-50"
           >
-            <Plus size={16} /> Más opciones
+            <Plus size={12} /> ADD OPTION
           </button>
         </div>
 
-        <button
-          type="submit"
-          disabled={correctIndices.length === 0 || isSubmitting}
-          className="mt-4 w-full bg-black hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all"
-        >
-          {isSubmitting ? (
-            "Guardando..."
-          ) : (
-            <>
-              <Save size={20} /> Guardar
-            </>
-          )}
-        </button>
+        <div className="pt-4 border-t border-slate-100">
+          <button
+            type="submit"
+            disabled={correctIndices.length === 0 || isSubmitting}
+            className="w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400 text-white font-semibold py-3 px-4 rounded-md shadow-sm transition-all text-sm flex justify-center items-center gap-2"
+          >
+            {isSubmitting ? (
+              "Processing..."
+            ) : (
+              <>
+                <Save size={16} /> ADD TO BANK
+              </>
+            )}
+          </button>
+        </div>
       </form>
     </div>
   );
