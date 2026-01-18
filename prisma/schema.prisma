@@ -1,0 +1,34 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// El "Banco" o tema (Ej: AWS Cloud Practitioner)
+model Bank {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  questions   Question[] // Relación 1 a muchos
+}
+
+// La Pregunta individual
+model Question {
+  id            String   @id @default(cuid())
+  questionText  String   // La pregunta
+  answers      String[] // Array de strings para respuestas 
+  options       String[] // Array de strings para opciones multiples
+  explanation   String?  // Explicación opcional del porqué es la correcta
+  
+  bankId        String
+  bank          Bank     @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  
+  createdAt     DateTime @default(now())
+}
