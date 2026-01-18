@@ -6,13 +6,12 @@ import Link from "next/link";
 import { ArrowLeft, Play, LayoutGrid, AlertTriangle } from "lucide-react";
 import { notFound } from "next/navigation";
 
-export default async function BankPage({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams: { page?: string };
-}) {
+interface PageProps {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ page?: string }>;
+}
+
+export default async function BankPage({ params, searchParams }: PageProps) {
   const { id } = await params;
   const { page } = await searchParams;
   const currentPage = Number(page) || 1;
