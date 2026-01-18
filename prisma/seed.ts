@@ -7,7 +7,7 @@ import questionsData from "../preguntas_ace.json";
 
 async function main() {
   // Asegúrate de tener el ID de tu Banco de Preguntas creado previamente
-  const bankId = "cmkj8fj5w000062qpzx68b6to"; 
+  const bankId = "cmkjctqoi0000625gsps9lbi9"; 
 
   console.log(`Seeding questions for bank: ${bankId}...`);
 
