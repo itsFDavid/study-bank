@@ -1,16 +1,13 @@
-# nixpacks.toml
-
 [phases.setup]
 nixPkgs = ["nodejs", "openssl"]
 
 [phases.install]
-cmds = ["npm install"]
+cmds = ["npm install", "npm install --save-dev prisma dotenv"]
 
 [phases.build]
-# MODIFICACIÓN AQUÍ:
-# Pasamos una DATABASE_URL falsa justo antes del comando.
-# Esto satisface a Prisma para generar el cliente sin romper nada.
-cmds = ["DATABASE_URL='postgresql://dummy:dummy@localhost:5432/dummy' npx prisma generate", "npm run build"]
+cmds = [
+  "DATABASE_URL='postgresql://dummy:dummy@localhost:5432/dummy' npx prisma generate", 
+  "DATABASE_URL='postgresql://dummy:dummy@localhost:5432/dummy' npm run build"
+]
 
-# startCmd va fuera de las fases, al nivel raíz
 startCmd = "npm run start"
