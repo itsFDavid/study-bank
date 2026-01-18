@@ -3,6 +3,8 @@ import { Book, Plus, ArrowRight, Clock } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
+export const dynamic = "force-dynamic";
+
 async function createBank(formData: FormData) {
   "use server";
   const title = formData.get("title") as string;
