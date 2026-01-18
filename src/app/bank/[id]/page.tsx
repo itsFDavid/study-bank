@@ -95,7 +95,7 @@ export default async function BankPage({
         </div>
 
         {/* RIGHT COLUMN: Question List */}
-        <div className="lg:col-span-8 order-1 lg:order-2">
+        <div className="lg:col-span-8 order-1">
           <div className="flex items-baseline justify-between mb-6 pb-2 border-b border-slate-200">
             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
               <LayoutGrid size={18} className="text-slate-400" />
