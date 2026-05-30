@@ -5,6 +5,7 @@ import { Trash2, Edit2, X, AlertCircle } from "lucide-react";
 import { deleteQuestion } from "@/app/actions";
 import FlashCard from "./FlashCard";
 import QuestionForm from "./QuestionForm";
+import { toast } from "sonner";
 
 // 1. TIPOS ESTRICTOS
 interface QuestionData {
@@ -20,6 +21,8 @@ interface QuestionItemProps {
   bankId: string;
   index: number;
   total: number;
+  hasSession?: boolean;
+  isOwner: boolean;
 }
 
 export default function QuestionItem({
@@ -27,36 +30,35 @@ export default function QuestionItem({
   bankId,
   index,
   total,
+  hasSession,
+  isOwner,
 }: QuestionItemProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const handleDelete = async () => {
-    // Reset error anterior
-    setDeleteError(null);
-
-    // Confirmación profesional
-    const confirmed = confirm(
-      `Confirm deletion of item ${total - index}?\n\nThis action cannot be undone.`,
-    );
-
-    if (!confirmed) return;
-
-    setIsDeleting(true);
-
-    try {
-      const result = await deleteQuestion(question.id, bankId);
-
-      if (!result.success) {
-        setDeleteError(result.error || "Failed to delete question");
-      }
-    } catch (error) {
-      console.error("Delete error:", error);
-      setDeleteError("System error: Unable to complete deletion");
-    } finally {
-      setIsDeleting(false);
-    }
+    toast.warning(`¿Eliminar el reactivo ${total - index}?`, {
+      description: "Esta acción no se puede deshacer.",
+      action: {
+        label: "Eliminar",
+        onClick: async () => {
+          setIsDeleting(true);
+          try {
+            const result = await deleteQuestion(question.id, bankId);
+            if (!result.success) {
+              toast.error(result.error || "No se pudo eliminar el reactivo");
+            } else {
+              toast.success("Reactivo eliminado");
+            }
+          } catch {
+            toast.error("Error del sistema al eliminar");
+          } finally {
+            setIsDeleting(false);
+          }
+        },
+      },
+      cancel: { label: "Cancelar", onClick: () => {} },
+    });
   };
 
   // MODO EDICIÓN
@@ -90,60 +92,37 @@ export default function QuestionItem({
         {total - index}.
       </span>
 
-      {/* ERROR DE ELIMINACIÓN (si existe) */}
-      {deleteError && (
-        <div className="mb-3 bg-rose-50 border-l-4 border-rose-700 p-3 rounded">
-          <div className="flex items-start gap-2">
-            <AlertCircle
-              className="text-rose-700 flex-shrink-0 mt-0.5"
-              size={16}
-            />
-            <div className="flex-1">
-              <p className="text-xs font-bold text-rose-900 mb-1">
-                Deletion Failed
-              </p>
-              <p className="text-xs text-rose-800">{deleteError}</p>
-            </div>
-            <button
-              onClick={() => setDeleteError(null)}
-              className="text-rose-400 hover:text-rose-600"
-              type="button"
-            >
-              <X size={14} />
-            </button>
-          </div>
+      {isOwner && (
+        <div className="absolute right-0 top-0 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1.5 p-2 bg-white/90 backdrop-blur-sm rounded-bl-md border-l border-b border-slate-200 shadow-sm">
+          <button
+            onClick={() => setIsEditing(true)}
+            className="p-1.5 bg-white border border-slate-300 text-slate-600 hover:text-blue-900 hover:border-blue-900 rounded transition-all"
+            title="Edit Item"
+            type="button"
+          >
+            <Edit2 size={14} />
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={isDeleting}
+            className="p-1.5 bg-white border border-slate-300 text-slate-600 hover:text-rose-700 hover:border-rose-700 rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Delete Item"
+            type="button"
+          >
+            {isDeleting ? (
+              <div className="w-3.5 h-3.5 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+            ) : (
+              <Trash2 size={14} />
+            )}
+          </button>
         </div>
       )}
-
-      {/* BOTONES DE ACCIÓN */}
-      <div className="absolute right-0 top-0 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1.5 p-2 bg-white/90 backdrop-blur-sm rounded-bl-md border-l border-b border-slate-200 shadow-sm">
-        <button
-          onClick={() => setIsEditing(true)}
-          className="p-1.5 bg-white border border-slate-300 text-slate-600 hover:text-blue-900 hover:border-blue-900 rounded transition-all"
-          title="Edit Item"
-          type="button"
-        >
-          <Edit2 size={14} />
-        </button>
-        <button
-          onClick={handleDelete}
-          disabled={isDeleting}
-          className="p-1.5 bg-white border border-slate-300 text-slate-600 hover:text-rose-700 hover:border-rose-700 rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Delete Item"
-          type="button"
-        >
-          {isDeleting ? (
-            <div className="w-3.5 h-3.5 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
-          ) : (
-            <Trash2 size={14} />
-          )}
-        </button>
-      </div>
 
       <FlashCard
         question={question.questionText}
         answers={question.answers}
         options={question.options}
+        hasSession={hasSession}
       />
     </div>
   );

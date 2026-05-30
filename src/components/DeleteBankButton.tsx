@@ -5,6 +5,7 @@ import { deleteBank } from "@/app/actions";
 import { Trash2, AlertTriangle, X, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export default function DeleteBankButton({ bankId }: { bankId: string }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -22,16 +23,17 @@ export default function DeleteBankButton({ bankId }: { bankId: string }) {
 
   const handleDelete = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Validación de seguridad estricta
     if (confirmInput !== "DELETE") return;
 
     setIsDeleting(true);
+    const toastId = toast.loading("Eliminando banco...");
+
     try {
       await deleteBank(bankId);
+      toast.success("Banco eliminado correctamente", { id: toastId });
       router.push("/");
-    } catch (error) {
-      console.error("Error deleting bank");
+    } catch {
+      toast.error("No se pudo eliminar el banco", { id: toastId });
       setIsDeleting(false);
     }
   };

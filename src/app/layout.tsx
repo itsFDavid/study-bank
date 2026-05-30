@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import Providers from "@/components/Providers";
+import { Toaster } from "sonner";
 import "./globals.css";
 
 // Metadata for SEO and social sharing
@@ -56,7 +58,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <Providers>
+          <Toaster richColors position="bottom-right" />
+          {children}
+        </Providers>
+      </body>
     </html>
   );
 }

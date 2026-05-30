@@ -9,39 +9,60 @@ import {
   RotateCcw,
   AlertTriangle,
   Clock,
-  LogOut, // Importamos icono para salir
-  ChevronLeft,
+  LogOut,
 } from "lucide-react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
+import SubmitReviewForm from "./SubmitReviewForm";
+
+// Interfaces de tipos estrictos
+interface QuizQuestion {
+  id: string;
+  questionText: string;
+  options: string[];
+  answers: string[];
+}
+
+interface QuizRunnerProps {
+  questions: QuizQuestion[];
+  bankId: string;
+  allowReviews: boolean;
+  maxAttempts: number;
+}
+
+interface CustomSessionUser {
+  id: string;
+}
 
 export default function QuizRunner({
   questions,
   bankId,
-}: {
-  questions: Array<{
-    id: string;
-    questionText: string;
-    options: string[];
-    answers: string[];
-  }>;
-  bankId: string;
-}) {
-  // --- STATE ---
-  const [currentIndex, setCurrentIndex] = useState(0);
+  allowReviews,
+  maxAttempts,
+}: QuizRunnerProps) {
+  const { data: session } = useSession();
+  const user = session?.user as CustomSessionUser | undefined;
+  const userId: string | undefined = user?.id;
+
+  // --- STATE CON TIPADO ESTRICTO ---
+  const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [userAnswers, setUserAnswers] = useState<Record<string, string[]>>({});
-  const [isFinished, setIsFinished] = useState(false);
+  const [isFinished, setIsFinished] = useState<boolean>(false);
+  const [attemptsCount, setAttemptsCount] = useState<number>(1);
 
   // Timer State (60 minutes = 3600 seconds)
-  const [timeRemaining, setTimeRemaining] = useState(60 * 60);
+  const [timeRemaining, setTimeRemaining] = useState<number>(60 * 60);
 
   const currentQuestion = questions[currentIndex];
-  const progressPercentage = ((currentIndex + 1) / questions.length) * 100;
-  const isMultiSelect = currentQuestion.answers.length > 1;
+  const progressPercentage = currentQuestion
+    ? ((currentIndex + 1) / questions.length) * 100
+    : 100;
+  const isMultiSelect = currentQuestion?.answers.length > 1;
 
   // --- TIMER LOGIC ---
   useEffect(() => {
-    if (isFinished) return;
+    if (isFinished || !currentQuestion) return;
 
     const timerInterval = setInterval(() => {
       setTimeRemaining((prev) => {
@@ -55,17 +76,17 @@ export default function QuizRunner({
     }, 1000);
 
     return () => clearInterval(timerInterval);
-  }, [isFinished]);
+  }, [isFinished, currentQuestion]);
 
   // Format seconds to MM:SS
-  const formatTime = (seconds: number) => {
+  const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
   // --- HANDLERS ---
-  const toggleOption = (option: string) => {
+  const toggleOption = (option: string): void => {
     if (selectedOptions.includes(option)) {
       setSelectedOptions((prev) => prev.filter((o) => o !== option));
     } else {
@@ -77,7 +98,9 @@ export default function QuizRunner({
     }
   };
 
-  const handleNext = () => {
+  const handleNext = (): void => {
+    if (!currentQuestion) return;
+
     const newAnswers = {
       ...userAnswers,
       [currentQuestion.id]: selectedOptions,
@@ -92,6 +115,27 @@ export default function QuizRunner({
     }
   };
 
+  const handleRetake = (): void => {
+    if (maxAttempts > 0 && attemptsCount >= maxAttempts) return;
+
+    setCurrentIndex(0);
+    setSelectedOptions([]);
+    setUserAnswers({});
+    setIsFinished(false);
+    setTimeRemaining(60 * 60);
+    setAttemptsCount((prev) => prev + 1);
+  };
+
+  if (!currentQuestion && !isFinished) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+        <p className="text-xs text-slate-400 font-medium">
+          Este banco no posee reactivos cargados.
+        </p>
+      </div>
+    );
+  }
+
   // --- RESULTS SCREEN ---
   if (isFinished) {
     let correctCount = 0;
@@ -104,9 +148,10 @@ export default function QuizRunner({
 
     const score = Math.round((correctCount / questions.length) * 100);
     const passed = score >= 70;
+    const reachAttemptsLimit = maxAttempts > 0 && attemptsCount >= maxAttempts;
 
     return (
-      <div className="max-w-5xl mx-auto py-12 px-6 font-sans">
+      <div className="max-w-5xl mx-auto py-12 px-6 font-sans space-y-8">
         <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
           {/* HEADER: Formal Report Style */}
           <div className="bg-slate-900 border-b border-slate-200 px-8 py-6 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -240,21 +285,37 @@ export default function QuizRunner({
           </div>
 
           {/* FOOTER ACTIONS */}
-          <div className="p-6 bg-slate-50 border-t border-slate-200 flex justify-center gap-4">
+          <div className="p-6 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row justify-center items-center gap-4">
             <Link
               href={`/bank/${bankId}`}
-              className="px-6 py-2.5 border border-slate-300 bg-white text-slate-700 font-semibold rounded hover:bg-slate-50 transition-colors text-sm shadow-sm"
+              className="w-full sm:w-auto text-center px-6 py-2.5 border border-slate-300 bg-white text-slate-700 font-semibold rounded hover:bg-slate-50 transition-colors text-sm shadow-sm"
             >
               Return to Bank
             </Link>
             <button
-              onClick={() => window.location.reload()}
-              className="px-6 py-2.5 bg-slate-900 text-white font-semibold rounded hover:bg-slate-800 transition-colors text-sm flex items-center gap-2 shadow-sm"
+              onClick={handleRetake}
+              disabled={reachAttemptsLimit}
+              className={cn(
+                "w-full sm:w-auto px-6 py-2.5 text-white font-semibold rounded transition-colors text-sm flex items-center justify-center gap-2 shadow-sm",
+                reachAttemptsLimit
+                  ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                  : "bg-slate-900 hover:bg-slate-800",
+              )}
             >
-              <RotateCcw size={16} /> Retake Examination
+              <RotateCcw size={16} />
+              {reachAttemptsLimit
+                ? "Attempts Limit Reached"
+                : `Retake Examination (${attemptsCount}/${maxAttempts || "∞"})`}
             </button>
           </div>
         </div>
+
+        {/* Formulario de Reseñas acoplado al final bajo el mismo ancho y consistencia visual */}
+        {allowReviews && userId && (
+          <div className="w-full">
+            <SubmitReviewForm bankId={bankId} />
+          </div>
+        )}
       </div>
     );
   }

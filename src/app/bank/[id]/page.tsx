@@ -1,173 +1,244 @@
+// src/app/bank/[id]/page.tsx
 import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
+import { ChevronLeft, Play, Lock } from "lucide-react";
+import BankSettingsForm from "@/components/BankSettingsForm";
+import ReviewSection from "@/components/ReviewSection";
 import QuestionForm from "@/components/QuestionForm";
 import QuestionItem from "@/components/QuestionItem";
-import DeleteBankButton from "@/components/DeleteBankButton";
-import Link from "next/link";
-import { ArrowLeft, Play, LayoutGrid, AlertTriangle } from "lucide-react";
-import { notFound } from "next/navigation";
+import BankPagination from "@/components/BankPagination";
 
-interface PageProps {
+interface BankPageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; limit?: string }>;
 }
 
-export default async function BankPage({ params, searchParams }: PageProps) {
-  const { id } = await params;
-  const { page } = await searchParams;
-  const currentPage = Number(page) || 1;
-  const PAGE_SIZE = 10;
-  const skip = (currentPage - 1) * PAGE_SIZE;
+interface CustomSessionUser {
+  id: string;
+}
 
-  const [bank, totalQuestions] = await Promise.all([
-    prisma.bank.findUnique({
-      where: { id },
-      include: {
-        questions: {
-          take: PAGE_SIZE,
-          skip: skip,
-          orderBy: { createdAt: "desc" },
-        },
+export default async function BankPage({
+  params,
+  searchParams,
+}: BankPageProps) {
+  const resolvedParams = await params;
+  const resolvedQueryParams = await searchParams;
+
+  const currentPage = Number(resolvedQueryParams.page || "1");
+  const currentLimit = Number(resolvedQueryParams.limit || "10");
+
+  const session = await getServerSession(authOptions);
+  const currentUserId = (session?.user as CustomSessionUser | undefined)?.id;
+  const hasSession =
+    typeof currentUserId === "string" && currentUserId.length > 0;
+
+  // 1. Obtener la metadata e información del banco de preguntas
+  const bankInfo = await prisma.bank.findUnique({
+    where: { id: resolvedParams.id },
+    include: {
+      reviews: {
+        include: { user: { select: { id: true, name: true, image: true } } },
+        orderBy: { createdAt: "desc" },
       },
-    }),
-    prisma.question.count({ where: { bankId: id } }),
-  ]);
+    },
+  });
 
-  if (!bank) notFound();
-  const totalPages = Math.ceil(totalQuestions / PAGE_SIZE);
+  if (!bankInfo) return notFound();
+
+  const isOwner = bankInfo.userId === currentUserId;
+  if (!bankInfo.isPublic && !isOwner) {
+    return redirect("/");
+  }
+
+  const userExistingReview = hasSession
+    ? await prisma.review.findFirst({
+        where: { bankId: resolvedParams.id, userId: currentUserId },
+      })
+    : null;
+
+  // 2. Realizar conteo total de reactivos para la paginación matemática
+  const totalQuestions = await prisma.bank.findUnique({
+    where: { id: resolvedParams.id },
+    select: { _count: { select: { questions: true } } },
+  });
+  const totalItems = totalQuestions?._count.questions || 0;
+  const totalPages = Math.ceil(totalItems / currentLimit);
+
+  // 3. Consulta segmentada y paginada directamente en PostgreSQL
+  const questionsData = await prisma.question.findMany({
+    where: { bankId: resolvedParams.id },
+    orderBy: { createdAt: "desc" },
+    skip: hasSession ? (currentPage - 1) * currentLimit : 0,
+    take: hasSession ? currentLimit : 5,
+  });
+
+  // Sanitizar respuestas si no hay sesión — NUNCA llegan al cliente
+  const sanitizedQuestions = questionsData.map((q) => ({
+    ...q,
+    answers: hasSession ? q.answers : [], // array vacío, no null
+  }));
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans">
-      {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex justify-between items-center">
-          <div className="flex items-center gap-4">
+    <main className="min-h-screen bg-slate-50 pb-12 font-sans">
+      {/* HEADER GLOBAL */}
+      <header className="bg-white border-b border-slate-200 h-16 flex items-center px-6 sticky top-0 z-20 shadow-sm">
+        <div className="max-w-7xl w-full mx-auto flex justify-between items-center">
+          <Link
+            href="/"
+            className="text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-slate-900 flex items-center gap-1 group transition-colors"
+          >
+            <ChevronLeft
+              size={16}
+              className="group-hover:-translate-x-0.5 transition-transform"
+            />{" "}
+            Volver al Tablero
+          </Link>
+
+          {hasSession ? (
             <Link
-              href="/"
-              className="text-slate-500 hover:text-slate-900 transition-colors flex items-center gap-1 text-sm font-medium"
+              href={`/bank/${bankInfo.id}/quiz`}
+              className="bg-blue-900 hover:bg-blue-800 text-white px-5 py-2 rounded text-xs font-bold uppercase tracking-wider shadow-sm flex items-center gap-2 transition-colors"
             >
-              <ArrowLeft size={16} /> Back
+              <Play size={12} className="fill-white" /> Iniciar Simulador
             </Link>
-            <div className="h-6 w-px bg-slate-200" />
-            <h1 className="text-lg font-bold text-slate-900 uppercase tracking-wide truncate max-w-[150px] md:max-w-md">
-              {bank.title}
-            </h1>
-          </div>
-
-          <div className="flex items-center gap-4">
-            {/* Ocultar en móvil, mostrar en desktop */}
-            <div className="hidden md:block">
-              <DeleteBankButton bankId={bank.id} />
-            </div>
-
-            {totalQuestions > 0 && (
-              <Link
-                href={`/bank/${bank.id}/quiz`}
-                className="bg-blue-900 hover:bg-blue-800 text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm flex items-center gap-2 transition-all whitespace-nowrap"
-              >
-                <Play size={14} fill="currentColor" />
-                <span className="hidden sm:inline">Start Examination</span>
-                <span className="sm:hidden">Start</span>
-              </Link>
-            )}
-          </div>
+          ) : (
+            <button
+              disabled
+              className="bg-slate-200 text-slate-400 px-5 py-2 rounded text-xs font-bold uppercase tracking-wider flex items-center gap-2 cursor-not-allowed border border-slate-300/60 shadow-sm"
+            >
+              <Lock size={12} /> Iniciar Simulador
+            </button>
+          )}
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* LEFT COLUMN: Input Form (Sticky)
-            CAMBIO: Eliminé 'order-2 lg:order-1'. 
-            Al estar primero en el HTML, por defecto saldrá arriba en móvil.
-        */}
-        <div className="lg:col-span-4">
-          <div className="sticky top-24 space-y-6">
-            {/* Formulario de Crear */}
-            <QuestionForm bankId={bank.id} />
+      {/* CONTENEDOR PRINCIPAL */}
+      <div className="max-w-7xl mx-auto px-6 py-10 space-y-10">
+        <div
+          className={`grid grid-cols-1 gap-2 overflow-hidden  ${isOwner ? "lg:grid-cols-2" : ""}`}
+          style={
+            isOwner ? { height: "calc(100vh - 160px)", minHeight: "520px" } : {}
+          }
+        >
+          {/* COLUMNA IZQUIERDA: siempre visible */}
+          <div className={`flex flex-col overflow-hidden`}>
+            <div className="px-5 py-4 border-b border-slate-200 flex-shrink-0">
+              <span className="text-[10px] font-bold font-mono tracking-widest text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 uppercase">
+                Banco Activo
+              </span>
+              <h1 className="text-xl font-bold text-slate-900 mt-2 tracking-tight leading-tight">
+                {bankInfo.title}
+              </h1>
+              <p className="text-slate-400 text-xs font-mono mt-1 uppercase">
+                ID: {bankInfo.id}
+              </p>
+            </div>
 
-            {/* Sección Danger Zone solo visible en móvil */}
-            <div className="md:hidden bg-white rounded-lg border border-rose-100 p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-rose-700 font-medium text-sm">
-                  <AlertTriangle size={16} />
-                  <span>Danger Zone</span>
+            <div className="flex-1 overflow-y-auto">
+              {isOwner && (
+                <div className="border-b border-slate-200">
+                  <BankSettingsForm
+                    bankId={bankInfo.id}
+                    initialIsPublic={bankInfo.isPublic}
+                    initialAllowReviews={bankInfo.allowReviews}
+                    initialMaxAttempts={bankInfo.maxAttempts}
+                  />
                 </div>
-                <DeleteBankButton bankId={bank.id} />
-              </div>
+              )}
+              {/* ReviewSection siempre visible, con paginación interna */}
+              <ReviewSection
+                reviews={bankInfo.reviews}
+                allowReviews={bankInfo.allowReviews}
+                bankId={bankInfo.id}
+                isOwner={isOwner}
+                hasSession={hasSession}
+                userAlreadyReviewed={!!userExistingReview}
+              />
             </div>
           </div>
+
+          {/* COLUMNA DERECHA: solo si es owner */}
+          {isOwner && (
+            <div className="flex flex-col overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-200 flex-shrink-0">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                  Añadir Reactivo
+                </p>
+              </div>
+              <div className="flex-1 overflow-y-auto px-4 py-3">
+                <QuestionForm bankId={bankInfo.id} />
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* RIGHT COLUMN: Question List
-         */}
-        <div className="lg:col-span-8">
-          <div className="flex items-baseline justify-between mb-6 pb-2 border-b border-slate-200">
-            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-              <LayoutGrid size={18} className="text-slate-400" />
-              Item Bank
-            </h2>
-            <span className="text-xs font-mono text-slate-500">
-              Showing {skip + 1}-{Math.min(skip + PAGE_SIZE, totalQuestions)} of{" "}
-              {totalQuestions}
+        <hr className="border-slate-200" />
+        <div className="w-full space-y-6">
+          <div className="flex justify-between items-baseline border-b pb-2">
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Ítems Registrados
+            </h3>
+            <span className="text-xs font-mono text-slate-400">
+              {hasSession
+                ? `${totalItems} Preguntas`
+                : `Muestra de ${questionsData.length} Preguntas`}
             </span>
           </div>
 
-          <div className="space-y-4">
-            {bank.questions.length > 0 ? (
-              bank.questions.map((q, index) => (
-                <div key={q.id}>
-                  <QuestionItem
-                    question={q}
-                    bankId={bank.id}
-                    index={skip + index}
-                    total={totalQuestions}
-                  />
-                </div>
-              ))
-            ) : (
-              <div className="bg-white border border-dashed border-slate-300 rounded-lg p-12 text-center">
-                <p className="text-slate-500">Repository is empty.</p>
-                <p className="text-sm text-slate-400 mt-1">
-                  Use the form to define examination items.
+          {/* Control de Paginación Avanzado */}
+          {hasSession && (
+            <div className="mt-6">
+              <BankPagination
+                totalPages={totalPages}
+                currentPage={currentPage}
+                totalItems={totalItems}
+                currentLimit={currentLimit}
+              />
+            </div>
+          )}
+
+          <div className="pt-2">
+            {sanitizedQuestions.map((question, index) => (
+              <QuestionItem
+                key={question.id}
+                question={question}
+                bankId={bankInfo.id}
+                index={
+                  hasSession ? (currentPage - 1) * currentLimit + index : index
+                }
+                total={totalItems}
+                hasSession={hasSession}
+                isOwner={isOwner}
+              />
+            ))}
+
+            {!hasSession && totalItems > 0 && (
+              <div className="p-6 border border-dashed border-blue-200 rounded-lg bg-blue-50/50 text-center space-y-2 mt-4 max-w-2xl mx-auto">
+                <Lock className="mx-auto text-blue-900" size={20} />
+                <h4 className="text-sm font-bold text-blue-900 uppercase tracking-wide">
+                  Contenido Restringido
+                </h4>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Estás viendo una muestra limitada de 5 reactivos en modo
+                  incógnito. Por favor, **inicia sesión con Google** para
+                  desbloquear la vista completa.
+                </p>
+              </div>
+            )}
+
+            {totalItems === 0 && (
+              <div className="text-center py-12 bg-white border border-dashed border-slate-200 rounded-lg">
+                <p className="text-xs text-slate-400 font-medium">
+                  Este banco de preguntas no contiene reactivos disponibles.
                 </p>
               </div>
             )}
           </div>
-
-          {/* Pagination Controls */}
-          {totalPages > 1 && (
-            <div className="mt-8 flex justify-center gap-2">
-              {currentPage > 1 ? (
-                <Link
-                  href={`?page=${currentPage - 1}`}
-                  className="px-3 py-1 bg-white border border-slate-300 text-sm rounded hover:bg-slate-50"
-                >
-                  Prev
-                </Link>
-              ) : (
-                <span className="px-3 py-1 text-slate-300 border border-slate-100 text-sm rounded">
-                  Prev
-                </span>
-              )}
-
-              <span className="px-3 py-1 text-sm text-slate-600 font-medium">
-                {currentPage} / {totalPages}
-              </span>
-
-              {currentPage < totalPages ? (
-                <Link
-                  href={`?page=${currentPage + 1}`}
-                  className="px-3 py-1 bg-white border border-slate-300 text-sm rounded hover:bg-slate-50"
-                >
-                  Next
-                </Link>
-              ) : (
-                <span className="px-3 py-1 text-slate-300 border border-slate-100 text-sm rounded">
-                  Next
-                </span>
-              )}
-            </div>
-          )}
         </div>
       </div>
-    </div>
+    </main>
   );
 }

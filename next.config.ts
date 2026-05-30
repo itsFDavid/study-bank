@@ -13,8 +13,28 @@ const withPWA = withPWAInit({
 });
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Mantiene activo el compilador nativo de React
   reactCompiler: true,
+  // limita el tamaño del body de Server Actions
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '256kb', // default es 1mb
+    },
+  },
+  // Silencia el error de Turbopack en desarrollo al usar Webpack para la PWA
+  turbopack: {},
+
+  // Configuración estricta de dominios autorizados para next/image
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "lh3.googleusercontent.com",
+        port: "",
+        pathname: "/**",
+      },
+    ],
+  },
 };
 
 export default withPWA(nextConfig);

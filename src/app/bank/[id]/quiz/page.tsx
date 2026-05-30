@@ -1,49 +1,92 @@
-// app/bank/[id]/quiz/page.tsx
 import { prisma } from "@/lib/prisma";
 import QuizRunner from "@/components/QuizRunner";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-// Utility function to shuffle array (Fisher-Yates)
+interface CustomSessionUser {
+  id: string;
+}
+
+interface QuizQuestionData {
+  id: string;
+  questionText: string;
+  options: string[];
+  answers: string[];
+}
+
+// Algoritmo puro de mezcla Fisher-Yates (Fuertemente Tipado)
 function shuffleArray<T>(array: T[]): T[] {
-  const shuffled = [...array];
+  const shuffled: T[] = [...array];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    const temp = shuffled[i];
+    shuffled[i] = shuffled[j];
+    shuffled[j] = temp;
   }
   return shuffled;
 }
 
 export default async function QuizPage({ params }: PageProps) {
-  // Fix para Next 15 (si usas Next 14 quita el await)
   const { id } = await params;
+  const session = await getServerSession(authOptions);
+  const currentUserId: string | undefined = (
+    session?.user as CustomSessionUser | undefined
+  )?.id;
 
-  // 1. Obtenemos el banco con TODAS sus preguntas
+  if (!currentUserId) {
+    return redirect("/");
+  }
+
+  // Consulta relacional estricta optimizada mediante select selectivo
   const bank = await prisma.bank.findUnique({
     where: { id },
-    include: {
-      questions: true,
+    select: {
+      id: true,
+      title: true,
+      isPublic: true,
+      allowReviews: true,
+      maxAttempts: true,
+      userId: true,
+      questions: {
+        select: {
+          id: true,
+          questionText: true,
+          options: true,
+          answers: true,
+        },
+      },
     },
   });
 
-  if (!bank) notFound();
+  if (!bank) return notFound();
 
-  // Validación si está vacío
+  // Control de Acceso del Lado del Servidor (Cierre de seguridad estricto)
+  const isOwner = bank.userId === currentUserId;
+  if (!bank.isPublic && !isOwner) {
+    return redirect("/");
+  }
+
+  // Validación semántica de registros existentes
   if (bank.questions.length === 0) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-50 text-center">
-        <h1 className="text-2xl font-bold mb-4">¡Ups! Banco vacío</h1>
-        <p className="text-gray-500 mb-8">
-          Necesitas agregar preguntas antes de practicar.
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-slate-50 text-center font-sans">
+        <h1 className="text-xl font-bold text-slate-900 mb-2 uppercase tracking-wide">
+          ¡Ups! Banco vacío
+        </h1>
+        <p className="text-xs text-slate-500 mb-6 leading-relaxed">
+          Necesitas agregar preguntas antes de poder iniciar una sesión práctica
+          de simulación.
         </p>
         <Link
           href={`/bank/${bank.id}`}
-          className="text-indigo-600 hover:underline"
+          className="text-xs font-bold uppercase tracking-wider text-blue-950 hover:text-blue-800 underline"
         >
           Volver a agregar preguntas
         </Link>
@@ -51,27 +94,30 @@ export default async function QuizPage({ params }: PageProps) {
     );
   }
 
-  // 2. ALGORITMO DE MEZCLA (Fisher-Yates Shuffle)
-  // Esto desordena el array de forma eficiente y justa
-  const shuffledQuestions = shuffleArray(bank.questions);
-
-  // 3. RECORTAMOS A MÁXIMO 60
-  // Si hay menos de 60, .slice() simplemente devuelve todas las que haya.
-  const selectedQuestions = shuffledQuestions.slice(0, 60);
+  // Mezcla y segmentación de datos limitada a 60 reactivos
+  const shuffledQuestions: QuizQuestionData[] = shuffleArray<QuizQuestionData>(
+    bank.questions,
+  );
+  const selectedQuestions: QuizQuestionData[] = shuffledQuestions.slice(0, 60);
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 font-sans">
+    <div className="min-h-screen bg-slate-50 py-8 px-4 font-sans">
       <div className="max-w-4xl mx-auto mb-6">
         <Link
           href={`/bank/${bank.id}`}
-          className="inline-flex items-center text-sm font-medium text-gray-500 hover:text-black transition-colors"
+          className="inline-flex items-center text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-slate-900 transition-colors"
         >
-          <ArrowLeft size={16} className="mr-1" /> Salir del examen
+          <ArrowLeft size={14} className="mr-1.5" /> Salir del examen
         </Link>
       </div>
 
-      {/* Le pasamos al Runner solo las 60 (o menos) preguntas ya desordenadas */}
-      <QuizRunner questions={selectedQuestions} bankId={bank.id} />
+      {/* Inyección de los parámetros de negocio tipados al componente de UI */}
+      <QuizRunner
+        questions={selectedQuestions}
+        bankId={bank.id}
+        allowReviews={bank.allowReviews}
+        maxAttempts={bank.maxAttempts}
+      />
     </div>
   );
 }

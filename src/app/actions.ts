@@ -3,124 +3,120 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 // =====================================================
-// TIPOS DE RETORNO CONSISTENTES
+// TIPOS DE RETORNO CONSISTENTES Y TIPADOS
 // =====================================================
-
-type ActionSuccess = {
-  success: true;
+type ActionSuccess = { 
+  success: true; 
 };
 
-type ActionError = {
-  success: false;
-  error: string;
-  details?: Record<string, string[] | undefined> | string;
+type ActionError = { 
+  success: false; 
+  error: string; 
+  details?: Record<string, string[] | undefined> | string; 
 };
 
 type ActionResult = ActionSuccess | ActionError;
 
-// =====================================================
-// ESQUEMAS DE VALIDACIÓN
-// =====================================================
+// Extensiones de interfaz para tipar de forma estricta la sesión de NextAuth
+interface CustomSessionUser {
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+  id: string;
+}
 
+// =====================================================
+// ESQUEMAS DE VALIDACIÓN (ZOD)
+// =====================================================
 const questionSchema = z.object({
   bankId: z.string().min(1, "Bank ID required"),
-  question: z
-    .string()
-    .min(10, "Question must be at least 10 characters")
-    .max(2000, "Question cannot exceed 2000 characters"),
-  options: z
-    .array(z.string().min(1, "Options cannot be empty"))
-    .min(2, "At least 2 options required")
-    .max(10, "Maximum 10 options allowed"),
-  correctIndices: z
-    .array(z.number().int().min(0))
-    .min(1, "At least one correct answer required"),
+  question: z.string().min(10, "Question must be at least 10 characters").max(2000),
+  options: z.array(z.string().min(1, "Option content cannot be empty")).min(2).max(10),
+  correctIndices: z.array(z.number().int().min(0)).min(1),
 });
 
 const bankSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters"),
+  isPublic: z.boolean().default(false),
+  allowReviews: z.boolean().default(true),
+  maxAttempts: z.number().int().min(0).default(0),
 });
 
-// =====================================================
-// QUESTION ACTIONS
-// =====================================================
+const bankSettingsSchema = z.object({
+  isPublic: z.boolean().default(false),
+  allowReviews: z.boolean().default(true),
+  maxAttempts: z.number().int().min(0).default(0),
+});
 
+// Helper interno para validar sesión y propiedad del recurso con tipado estricto
+async function getAuthenticatedUser(): Promise<string> {
+  const session = await getServerSession(authOptions);
+  const user = session?.user as CustomSessionUser | undefined;
+  
+  if (!user || !user.id) {
+    throw new Error("UNAUTHORIZED: Debe iniciar sesión con Google para realizar esta acción.");
+  }
+  return user.id;
+}
+
+// Helper para parsear de manera segura y tipada cualquier error en el bloque catch
+function handleActionError(error: unknown): ActionError {
+  if (error instanceof z.ZodError) {
+    const issues = error.issues ?? [];
+    const messages = issues
+      .map((e) => `${e.path.join(".") || "campo"}: ${e.message}`)
+      .join(" · ");
+    return {
+      success: false,
+      error: messages,
+      details: error.flatten().fieldErrors,
+    };
+  }
+  if (error instanceof Error) {
+    return { success: false, error: error.message };
+  }
+  return { success: false, error: "Ocurrió un error desconocido en el servidor." };
+}
+
+// =====================================================
+// QUESTION ACTIONS (PROTEGIDAS Y TIPADAS)
+// =====================================================
 export async function addQuestion(formData: FormData): Promise<ActionResult> {
   try {
-    const bankId = formData.get("bankId") as string;
-    const question = formData.get("question") as string;
-    const options = formData.getAll("options") as string[];
-    const correctIndices = formData
-      .getAll("correctIndices")
-      .map((idx) => Number(idx));
+    const userId = await getAuthenticatedUser();
+    
+    const bankId = formData.get("bankId")?.toString() || "";
+    const question = formData.get("question")?.toString() || "";
+    const options = formData.getAll("options").map(o => o.toString());
+    const correctIndices = formData.getAll("correctIndices").map(idx => Number(idx));
 
     const validated = questionSchema.parse({
       bankId,
       question,
-      options: options.filter((opt) => opt.trim() !== ""),
+      options: options.filter(o => o.trim() !== ""),
       correctIndices,
     });
 
-    // Validar índices dentro de rango
-    const maxIndex = validated.options.length - 1;
-    const invalidIndices = validated.correctIndices.filter(
-      (idx) => idx < 0 || idx > maxIndex
-    );
-
-    if (invalidIndices.length > 0) {
-      return {
-        success: false,
-        error: "Invalid answer indices",
-        details: "Selected indices are out of range",
-      };
-    }
-
-    // Verificar existencia del banco
-    const bankExists = await prisma.bank.findUnique({
+    // Verificar propiedad: El banco debe pertenecer al usuario logueado
+    const bank = await prisma.bank.findUnique({
       where: { id: validated.bankId },
-      select: { id: true },
+      select: { userId: true },
     });
 
-    if (!bankExists) {
-      return {
-        success: false,
-        error: "Bank not found",
-        details: "The specified question bank does not exist",
-      };
+    if (!bank || bank.userId !== userId) {
+      return { success: false, error: "FORBIDDEN: No tienes permisos para añadir preguntas a este banco." };
     }
 
-    // Sanitización
-    const sanitizedQuestion = validated.question.trim();
-    const sanitizedOptions = validated.options.map((opt) => opt.trim());
+    const sanitizedOptions = validated.options.map(opt => opt.trim());
+    const correctAnswers = validated.correctIndices.map(idx => sanitizedOptions[idx]);
 
-    // Rate limiting
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    const recentQuestions = await prisma.question.count({
-      where: {
-        bankId: validated.bankId,
-        createdAt: { gte: oneHourAgo },
-      },
-    });
-
-    if (recentQuestions > 100) {
-      return {
-        success: false,
-        error: "Rate limit exceeded",
-        details: "Maximum 100 questions per hour",
-      };
-    }
-
-    // Mapear respuestas correctas
-    const correctAnswers = validated.correctIndices.map(
-      (index) => sanitizedOptions[index]
-    );
-
-    // Crear pregunta
     await prisma.question.create({
       data: {
-        questionText: sanitizedQuestion,
+        questionText: validated.question.trim(),
         answers: correctAnswers,
         options: sanitizedOptions,
         bankId: validated.bankId,
@@ -130,50 +126,39 @@ export async function addQuestion(formData: FormData): Promise<ActionResult> {
     revalidatePath(`/bank/${validated.bankId}`);
     return { success: true };
   } catch (error) {
-
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: "Invalid data",
-        details: error.flatten().fieldErrors,
-      };
-    }
-
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error occurred",
-    };
+    return handleActionError(error);
   }
 }
 
-export async function updateQuestion(
-  formData: FormData
-): Promise<ActionResult> {
+export async function updateQuestion(formData: FormData): Promise<ActionResult> {
   try {
-    const questionId = formData.get("questionId") as string;
-    const bankId = formData.get("bankId") as string;
-    const question = formData.get("question") as string;
-    const options = formData.getAll("options") as string[];
-    const correctIndices = formData.getAll("correctIndices").map(Number);
-
-    if (!questionId) {
-      return {
-        success: false,
-        error: "Question ID required",
-      };
-    }
+    const userId = await getAuthenticatedUser();
+    
+    const questionId = formData.get("questionId")?.toString() || "";
+    const bankId = formData.get("bankId")?.toString() || "";
+    const question = formData.get("question")?.toString() || "";
+    const options = formData.getAll("options").map(o => o.toString());
+    const correctIndices = formData.getAll("correctIndices").map(idx => Number(idx));
 
     const validated = questionSchema.parse({
       bankId,
       question,
-      options: options.filter((opt) => opt.trim() !== ""),
+      options: options.filter(o => o.trim() !== ""),
       correctIndices,
     });
 
-    const sanitizedOptions = validated.options.map((opt) => opt.trim());
-    const correctAnswers = validated.correctIndices.map(
-      (index) => sanitizedOptions[index]
-    );
+    // Verificar propiedad cruzada
+    const currentQuestion = await prisma.question.findUnique({
+      where: { id: questionId },
+      include: { bank: { select: { userId: true } } },
+    });
+
+    if (!currentQuestion || currentQuestion.bank.userId !== userId) {
+      return { success: false, error: "FORBIDDEN: No eres el propietario de este contenido." };
+    }
+
+    const sanitizedOptions = validated.options.map(opt => opt.trim());
+    const correctAnswers = validated.correctIndices.map(idx => sanitizedOptions[idx]);
 
     await prisma.question.update({
       where: { id: questionId },
@@ -187,120 +172,80 @@ export async function updateQuestion(
     revalidatePath(`/bank/${bankId}`);
     return { success: true };
   } catch (error) {
-
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: "Invalid data",
-        details: error.flatten().fieldErrors,
-      };
-    }
-
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Update failed",
-    };
+    return handleActionError(error);
   }
 }
 
-export async function deleteQuestion(
-  questionId: string,
-  bankId: string
-): Promise<ActionResult> {
+export async function deleteQuestion(questionId: string, bankId: string): Promise<ActionResult> {
   try {
-    if (!questionId || !bankId) {
-      return {
-        success: false,
-        error: "Missing required parameters",
-      };
-    }
+    const userId = await getAuthenticatedUser();
 
-    // Verificar existencia antes de eliminar
     const question = await prisma.question.findUnique({
       where: { id: questionId },
-      select: { id: true, bankId: true },
+      include: { bank: { select: { userId: true } } },
     });
 
-    if (!question) {
-      return {
-        success: false,
-        error: "Question not found",
-      };
+    if (!question || question.bank.userId !== userId) {
+      return { success: false, error: "FORBIDDEN: Acción no permitida." };
     }
 
-    if (question.bankId !== bankId) {
-      return {
-        success: false,
-        error: "Question does not belong to this bank",
-      };
-    }
-
-    await prisma.question.delete({
-      where: { id: questionId },
-    });
-
+    await prisma.question.delete({ where: { id: questionId } });
     revalidatePath(`/bank/${bankId}`);
     return { success: true };
   } catch (error) {
-    return {
-      success: false,
-      error: "Failed to delete question",
-    };
+    return handleActionError(error);
   }
 }
 
 // =====================================================
-// BANK ACTIONS
+// BANK ACTIONS (PROTEGIDAS Y TIPADAS)
 // =====================================================
-
 export async function deleteBank(bankId: string): Promise<ActionResult> {
   try {
-    if (!bankId) {
-      return {
-        success: false,
-        error: "Bank ID required",
-      };
+    const userId = await getAuthenticatedUser();
+
+    const bank = await prisma.bank.findUnique({ where: { id: bankId }, select: { userId: true } });
+    if (!bank || bank.userId !== userId) {
+      return { success: false, error: "FORBIDDEN: No puedes eliminar este banco." };
     }
 
     await prisma.bank.delete({ where: { id: bankId } });
     revalidatePath("/");
     return { success: true };
   } catch (error) {
-    return {
-      success: false,
-      error: "Failed to delete bank",
-    };
+    return handleActionError(error);
   }
 }
 
-export async function updateBank(
-  bankId: string,
-  formData: FormData
-): Promise<ActionResult> {
+export async function updateBank(bankId: string, formData: FormData): Promise<ActionResult> {
   try {
-    const title = formData.get("title") as string;
+    const userId = await getAuthenticatedUser();
 
-    const validated = bankSchema.safeParse({ title });
-
-    if (!validated.success) {
-      return {
-        success: false,
-        error: validated.error.flatten().fieldErrors.title?.[0] || "Invalid data",
-      };
+    const bank = await prisma.bank.findUnique({ where: { id: bankId }, select: { userId: true } });
+    if (!bank || bank.userId !== userId) {
+      return { success: false, error: "FORBIDDEN: No puedes modificar este banco." };
     }
+
+    const isPublic = formData.get("isPublic") === "true";
+    const allowReviews = formData.get("allowReviews") === "true";
+    const maxAttempts = Number(formData.get("maxAttempts") || 0);
+
+    const validated = bankSettingsSchema.parse({ isPublic, allowReviews, maxAttempts });
 
     await prisma.bank.update({
       where: { id: bankId },
-      data: { title: validated.data.title },
+      data: {
+        isPublic: validated.isPublic,
+        allowReviews: validated.allowReviews,
+        maxAttempts: validated.maxAttempts,
+      },
     });
 
     revalidatePath("/");
     revalidatePath(`/bank/${bankId}`);
     return { success: true };
   } catch (error) {
-    return {
-      success: false,
-      error: "Failed to rename bank",
-    };
+    console.error("Error updating bank:", error);
+    return handleActionError(error);
   }
 }

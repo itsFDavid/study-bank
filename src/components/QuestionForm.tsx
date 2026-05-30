@@ -5,6 +5,8 @@ import { Plus, X, CheckSquare, Save, AlertCircle, Loader2 } from "lucide-react";
 import { addQuestion, updateQuestion } from "@/app/actions";
 import { cn } from "@/lib/utils";
 
+import { toast } from "sonner";
+
 // =====================================================
 // TIPOS
 // =====================================================
@@ -35,14 +37,14 @@ export default function QuestionForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Estados de error separados
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<
     string,
     string[]
   > | null>(null);
 
   // Estado de éxito (opcional, para feedback visual)
-  const [showSuccess, setShowSuccess] = useState(false);
+  // const [showSuccess, setShowSuccess] = useState(false);
 
   // Estado inicial inteligente
   const [options, setOptions] = useState<string[]>(
@@ -63,7 +65,7 @@ export default function QuestionForm({
 
   const addOption = () => {
     if (options.length >= 8) {
-      setErrorMessage("Maximum 8 options allowed");
+      toast.error("Maximum 8 options allowed");
       return;
     }
     setOptions([...options, ""]);
@@ -71,7 +73,7 @@ export default function QuestionForm({
 
   const removeOption = (index: number) => {
     if (options.length <= 2) {
-      setErrorMessage("Minimum 2 options required");
+      toast.error("At least 2 options are required");
       return;
     }
     const newOptions = options.filter((_, i) => i !== index);
@@ -79,7 +81,6 @@ export default function QuestionForm({
     setCorrectIndices((prev) =>
       prev.filter((i) => i !== index).map((i) => (i > index ? i - 1 : i)),
     );
-    setErrorMessage(null);
   };
 
   const handleOptionChange = (index: number, value: string) => {
@@ -96,9 +97,7 @@ export default function QuestionForm({
 
   async function handleSubmit(formData: FormData) {
     setIsSubmitting(true);
-    setErrorMessage(null);
     setFieldErrors(null);
-    setShowSuccess(false);
 
     try {
       let result;
@@ -113,17 +112,30 @@ export default function QuestionForm({
 
       // Manejar respuesta
       if (!result.success) {
-        setErrorMessage(result.error || "Operation failed");
-
-        // Si hay detalles de errores de campo
         if (typeof result.details === "object" && result.details !== null) {
-          setFieldErrors(result.details as Record<string, string[]>);
+          const fieldErrors = result.details as Record<string, string[]>;
+          setFieldErrors(fieldErrors);
+
+          // Construir mensaje legible para el toast desde los detalles
+          const messages = Object.entries(fieldErrors)
+            .flatMap(([field, errs]) =>
+              (errs ?? []).map((e) => `${field}: ${e}`),
+            )
+            .join("\n");
+
+          toast.error(messages || result.error);
+        } else {
+          toast.error(result.error);
         }
         return;
       }
 
       // ÉXITO
-      setShowSuccess(true);
+      // setShowSuccess(true);
+
+      toast.success(
+        initialData ? "Reactivo actualizado" : "Reactivo añadido al banco",
+      );
 
       // Solo resetear si estamos creando (no editando)
       if (!initialData) {
@@ -135,13 +147,10 @@ export default function QuestionForm({
       // Callback de éxito (para cerrar modal si es edición)
       if (onSuccess) {
         setTimeout(() => onSuccess(), 300);
-      } else {
-        // Auto-hide success message después de 3s
-        setTimeout(() => setShowSuccess(false), 3000);
       }
     } catch (err) {
       console.error("Form submission error:", err);
-      setErrorMessage("System error: Unable to complete operation");
+      toast.error("Error del sistema: no se pudo completar la operación");
     } finally {
       setIsSubmitting(false);
     }
@@ -168,74 +177,6 @@ export default function QuestionForm({
         {correctIndices.map((idx) => (
           <input key={idx} type="hidden" name="correctIndices" value={idx} />
         ))}
-
-        {/* MENSAJE DE ERROR */}
-        {errorMessage && (
-          <div className="bg-rose-50 border-l-4 border-rose-700 p-4 rounded">
-            <div className="flex gap-3">
-              <AlertCircle
-                className="text-rose-700 flex-shrink-0 mt-0.5"
-                size={18}
-              />
-              <div className="flex-1">
-                <h4 className="text-sm font-bold text-rose-900 mb-1">
-                  Validation Error
-                </h4>
-                <p className="text-xs text-rose-800">{errorMessage}</p>
-
-                {/* Errores de campo específicos */}
-                {fieldErrors && Object.keys(fieldErrors).length > 0 && (
-                  <ul className="mt-2 space-y-1">
-                    {Object.entries(fieldErrors).map(([field, errors]) =>
-                      errors?.map((err, idx) => (
-                        <li
-                          key={`${field}-${idx}`}
-                          className="text-xs text-rose-700"
-                        >
-                          •{" "}
-                          <span className="font-semibold capitalize">
-                            {field}:
-                          </span>{" "}
-                          {err}
-                        </li>
-                      )),
-                    )}
-                  </ul>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setErrorMessage(null);
-                  setFieldErrors(null);
-                }}
-                className="text-rose-400 hover:text-rose-600 transition-colors"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* MENSAJE DE ÉXITO */}
-        {showSuccess && !initialData && (
-          <div className="bg-emerald-50 border-l-4 border-emerald-700 p-4 rounded">
-            <div className="flex gap-3">
-              <CheckSquare
-                className="text-emerald-700 flex-shrink-0"
-                size={18}
-              />
-              <div className="flex-1">
-                <h4 className="text-sm font-bold text-emerald-900">
-                  Record Added Successfully
-                </h4>
-                <p className="text-xs text-emerald-800 mt-0.5">
-                  Question has been added to the bank.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* CAMPO: PREGUNTA */}
         <div className="space-y-2">

@@ -9,26 +9,64 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// El "Banco" o tema (Ej: AWS Cloud Practitioner)
-model Bank {
-  id          String     @id @default(cuid())
-  title       String
-  description String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  questions   Question[] // Relación 1 a muchos
+// Tabla de Usuarios para Google Auth e Invitados
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  image         String?   // URL de la foto de perfil de Google
+  createdAt     DateTime  @default(now())
+  
+  banks         Bank[]    // Bancos creados por este usuario
+  reviews       Review[]  // Reseñas escritas por este usuario
 }
 
-// La Pregunta individual
+// El "Banco" de preguntas con configuraciones avanzadas del Autor
+model Bank {
+  id            String     @id @default(cuid())
+  title         String
+  description   String?
+  
+  // Configuraciones solicitadas
+  isPublic      Boolean    @default(false) // Si es falso, es privado del creador
+  allowReviews  Boolean    @default(true)  // Permitir comentarios y estrellas
+  maxAttempts   Int        @default(0)     // 0 = Intentos ilimitados, >0 = Límite estricto
+
+  userId        String     // ID del creador del banco
+  author        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  questions     Question[] // Relación 1 a muchos con borrado en cascada
+  reviews       Review[]   // Relación 1 a muchos para comentarios y ratings
+  
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
+// La Pregunta individual (Se mantiene igual para no romper tus componentes)
 model Question {
   id            String   @id @default(cuid())
-  questionText  String   // La pregunta
-  answers      String[] // Array de strings para respuestas 
-  options       String[] // Array de strings para opciones multiples
-  explanation   String?  // Explicación opcional del porqué es la correcta
+  questionText  String   
+  answers       String[] 
+  options       String[] 
+  explanation   String?  
   
   bankId        String
   bank          Bank     @relation(fields: [bankId], references: [id], onDelete: Cascade)
   
   createdAt     DateTime @default(now())
+}
+
+// Sistema de Calificaciones y Reseñas Colectivas
+model Review {
+  id        String   @id @default(cuid())
+  rating    Float    // Permite calificaciones intermedias como 1.5, 3.5, 4.8
+  comment   String   // El comentario o duda académica obligatoria/opcional
+  
+  userId    String   // Quién evalúa
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  bankId    String   // Qué banco evalúa
+  bank      Bank     @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
 }
