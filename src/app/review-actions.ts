@@ -6,7 +6,7 @@ import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
-import { reviewRatelimit } from "@/lib/ratelimit";
+import { checkLimit, reviewLimiter } from "@/lib/ratelimit";
 import { getClientIp } from "@/lib/get-ip";
 
 // =====================================================
@@ -63,9 +63,13 @@ async function getLoggedUserId(): Promise<string> {
  */
 export async function submitReview(formData: FormData): Promise<ActionResult> {
   try {
+
+    
     // 1. Validar autenticación de seguridad
     const userId = await getLoggedUserId();
-    const { success: allowed } = await reviewRatelimit.limit(userId);
+    const ip = await getClientIp();
+
+    const allowed = await checkLimit(reviewLimiter, `${userId}:${ip}`);
     if (!allowed) {
       return { success: false, error: "Demasiados intentos. Espera antes de enviar otra reseña." };
     }

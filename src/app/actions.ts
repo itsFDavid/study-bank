@@ -6,6 +6,9 @@ import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
+import { checkLimit, mutationLimiter, reviewRatelimit } from "@/lib/ratelimit";
+import { getClientIp } from "@/lib/get-ip";
+
 // =====================================================
 // TIPOS DE RETORNO CONSISTENTES Y TIPADOS
 // =====================================================
@@ -55,8 +58,17 @@ const bankSettingsSchema = z.object({
 // Helper interno para validar sesión y propiedad del recurso con tipado estricto
 async function getAuthenticatedUser(): Promise<string> {
   const session = await getServerSession(authOptions);
+  const userId = await getAuthenticatedUser();
   const user = session?.user as CustomSessionUser | undefined;
   
+    const ip = await getClientIp();
+
+    const allowed = await checkLimit(mutationLimiter, `${userId}:${ip}`);
+    if (!allowed) {
+      return { success: false, error: "Demasiadas operaciones. Intenta en unos segundos." };
+    }
+
+
   if (!user || !user.id) {
     throw new Error("UNAUTHORIZED: Debe iniciar sesión con Google para realizar esta acción.");
   }
