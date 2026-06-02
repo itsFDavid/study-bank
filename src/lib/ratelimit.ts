@@ -1,43 +1,56 @@
-import { createClient } from "redis";
+import Redis from "ioredis";
 import { RateLimiterRedis, RateLimiterRes } from "rate-limiter-flexible";
 
-const redisClient = createClient({
-  url: process.env.REDIS_URL || "redis://localhost:6379",
-});
+// 1. Definir el espacio global para desarrollo
+const globalForRedis = global as unknown as {
+  redisClient: Redis;
+  mutationLimiter: RateLimiterRedis;
+  reviewLimiter: RateLimiterRedis;
+  attemptLimiter: RateLimiterRedis;
+};
 
-redisClient.connect().catch((err) => {
-  console.error("[Redis] Connection error:", err);
-});
+// 2. Instanciar el cliente de ioredis (se conecta automáticamente)
+export const redisClient =
+  globalForRedis.redisClient ||
+  new Redis(process.env.REDIS_URL || "redis://localhost:6379");
 
-redisClient.on("error", (err) => {
-  console.error("[Redis] Client error:", err);
-});
+// 3. Instanciar o reutilizar los limitadores
+export const mutationLimiter =
+  globalForRedis.mutationLimiter ||
+  new RateLimiterRedis({
+    storeClient: redisClient,
+    keyPrefix: "rl:mutation",
+    points: 30,
+    duration: 60,
+  });
 
-// 30 mutaciones por minuto (añadir/editar/borrar preguntas y bancos)
-export const mutationLimiter = new RateLimiterRedis({
-  storeClient: redisClient,
-  keyPrefix: "rl:mutation",
-  points: 30,
-  duration: 60,
-});
+export const reviewLimiter =
+  globalForRedis.reviewLimiter ||
+  new RateLimiterRedis({
+    storeClient: redisClient,
+    keyPrefix: "rl:review",
+    points: 3,
+    duration: 3600,
+  });
 
-// 3 reseñas por hora
-export const reviewLimiter = new RateLimiterRedis({
-  storeClient: redisClient,
-  keyPrefix: "rl:review",
-  points: 3,
-  duration: 3600,
-});
+export const attemptLimiter =
+  globalForRedis.attemptLimiter ||
+  new RateLimiterRedis({
+    storeClient: redisClient,
+    keyPrefix: "rl:attempt",
+    points: 5,
+    duration: 3600,
+  });
 
-// 5 intentos de quiz registrados por hora
-export const attemptLimiter = new RateLimiterRedis({
-  storeClient: redisClient,
-  keyPrefix: "rl:attempt",
-  points: 5,
-  duration: 3600,
-});
+// 4. Guardar en global si estamos en desarrollo
+if (process.env.NODE_ENV !== "production") {
+  globalForRedis.redisClient = redisClient;
+  globalForRedis.mutationLimiter = mutationLimiter;
+  globalForRedis.reviewLimiter = reviewLimiter;
+  globalForRedis.attemptLimiter = attemptLimiter;
+}
 
-// Helper tipado para consumir un punto — retorna false si excede el límite
+// Helper tipado para consumir un punto
 export async function checkLimit(
   limiter: RateLimiterRedis,
   key: string,
@@ -46,11 +59,15 @@ export async function checkLimit(
     await limiter.consume(key);
     return true;
   } catch (e) {
-    if (e instanceof RateLimiterRes) return false; // límite alcanzado
-    throw e; // error real de Redis — propagar
+    if (e instanceof RateLimiterRes) return false;
+    throw e;
   }
 }
 
-export function buildRateLimitKey(userId: string, ip: string, prefix: string): string {
+export function buildRateLimitKey(
+  userId: string,
+  ip: string,
+  prefix: string,
+): string {
   return `${prefix}:${userId}:${ip}`;
 }

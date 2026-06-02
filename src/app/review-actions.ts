@@ -63,8 +63,6 @@ async function getLoggedUserId(): Promise<string> {
  */
 export async function submitReview(formData: FormData): Promise<ActionResult> {
   try {
-
-    
     // 1. Validar autenticación de seguridad
     const userId = await getLoggedUserId();
     const ip = await getClientIp();
@@ -140,6 +138,83 @@ export async function submitReview(formData: FormData): Promise<ActionResult> {
     return {
       success: false,
       error: error instanceof Error ? error.message : "Error interno del servidor al procesar la reseña.",
+    };
+  }
+}
+
+export async function updateReview(formData: FormData): Promise<ActionResult> {
+  try {
+    const userId = await getLoggedUserId();
+    const ip = await getClientIp();
+    const allowed = await checkLimit(reviewLimiter, `update:${userId}:${ip}`);
+    if (!allowed) {
+      return { success: false, error: "Demasiados intentos. Espera antes de editar." };
+    }
+
+    const reviewId = formData.get("reviewId")?.toString() || "";
+    const rating = Number(formData.get("rating") || 0);
+    const comment = formData.get("comment")?.toString() || "";
+
+    const validated = z.object({
+      rating: z.number().min(1, "Mínimo 1 estrella").max(5, "Máximo 5 estrellas"),
+      comment: z.string().min(5, "Al menos 5 caracteres").max(1000, "Máximo 1000 caracteres"),
+    }).parse({ rating, comment });
+
+    const review = await prisma.review.findUnique({
+      where: { id: reviewId },
+      select: { userId: true, bankId: true },
+    });
+
+    if (!review || review.userId !== userId) {
+      return { success: false, error: "FORBIDDEN: No puedes editar esta reseña." };
+    }
+
+    await prisma.review.update({
+      where: { id: reviewId },
+      data: { rating: validated.rating, comment: validated.comment.trim() },
+    });
+
+    revalidatePath(`/bank/${review.bankId}`);
+    return { success: true };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      const messages = (error.issues ?? [])
+        .map((e) => `${e.path.join(".") || "campo"}: ${e.message}`)
+        .join(" · ");
+      return { success: false, error: messages };
+    }
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Error desconocido.",
+    };
+  }
+}
+
+export async function deleteReview(reviewId: string): Promise<ActionResult> {
+  try {
+    const userId = await getLoggedUserId();
+    const ip = await getClientIp();
+    const allowed = await checkLimit(reviewLimiter, `delete:${userId}:${ip}`);
+    if (!allowed) {
+      return { success: false, error: "Demasiados intentos." };
+    }
+
+    const review = await prisma.review.findUnique({
+      where: { id: reviewId },
+      select: { userId: true, bankId: true },
+    });
+
+    if (!review || review.userId !== userId) {
+      return { success: false, error: "FORBIDDEN: No puedes eliminar esta reseña." };
+    }
+
+    await prisma.review.delete({ where: { id: reviewId } });
+    revalidatePath(`/bank/${review.bankId}`);
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Error desconocido.",
     };
   }
 }

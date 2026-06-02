@@ -145,6 +145,8 @@ export default async function BankPage({
                     initialIsPublic={bankInfo.isPublic}
                     initialAllowReviews={bankInfo.allowReviews}
                     initialMaxAttempts={bankInfo.maxAttempts}
+                    initialAllowRevealKey={bankInfo.allowRevealKey} 
+                    initialTimeLimit={bankInfo.timeLimit} 
                   />
                 </div>
               )}
@@ -156,6 +158,7 @@ export default async function BankPage({
                 isOwner={isOwner}
                 hasSession={hasSession}
                 userAlreadyReviewed={!!userExistingReview}
+                currentUserId={currentUserId}
               />
             </div>
           </div>

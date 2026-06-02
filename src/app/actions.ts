@@ -6,7 +6,7 @@ import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
-import { checkLimit, mutationLimiter, reviewRatelimit } from "@/lib/ratelimit";
+import { attemptLimiter, checkLimit, mutationLimiter} from "@/lib/ratelimit";
 import { getClientIp } from "@/lib/get-ip";
 
 // =====================================================
@@ -52,26 +52,30 @@ const bankSchema = z.object({
 const bankSettingsSchema = z.object({
   isPublic: z.boolean().default(false),
   allowReviews: z.boolean().default(true),
+  allowRevealKey: z.boolean().default(true), 
+  timeLimit: z.number().int().min(0).default(0),
   maxAttempts: z.number().int().min(0).default(0),
 });
 
 // Helper interno para validar sesión y propiedad del recurso con tipado estricto
 async function getAuthenticatedUser(): Promise<string> {
   const session = await getServerSession(authOptions);
-  const userId = await getAuthenticatedUser();
   const user = session?.user as CustomSessionUser | undefined;
-  
-    const ip = await getClientIp();
 
-    const allowed = await checkLimit(mutationLimiter, `${userId}:${ip}`);
-    if (!allowed) {
-      return { success: false, error: "Demasiadas operaciones. Intenta en unos segundos." };
-    }
-
-
+  // 1. Validar que la sesión exista primero
   if (!user || !user.id) {
     throw new Error("UNAUTHORIZED: Debe iniciar sesión con Google para realizar esta acción.");
   }
+
+  // 2. Obtener la IP y verificar el límite usando el id validado
+  const ip = await getClientIp();
+  const allowed = await checkLimit(mutationLimiter, `${user.id}:${ip}`);
+  
+  if (!allowed) {
+    throw new Error("Demasiadas operaciones. Intenta en unos segundos.");
+  }
+
+  // 3. Retornar el ID seguro
   return user.id;
 }
 
@@ -100,6 +104,12 @@ function handleActionError(error: unknown): ActionError {
 export async function addQuestion(formData: FormData): Promise<ActionResult> {
   try {
     const userId = await getAuthenticatedUser();
+    
+    const ip = await getClientIp();
+    const allowed = await checkLimit(mutationLimiter, `${userId}:${ip}`);
+    if (!allowed) {
+      return { success: false, error: "Demasiadas operaciones. Intenta en unos segundos." };
+    }
     
     const bankId = formData.get("bankId")?.toString() || "";
     const question = formData.get("question")?.toString() || "";
@@ -146,6 +156,12 @@ export async function updateQuestion(formData: FormData): Promise<ActionResult> 
   try {
     const userId = await getAuthenticatedUser();
     
+    const ip = await getClientIp();
+    const allowed = await checkLimit(mutationLimiter, `${userId}:${ip}`);
+    if (!allowed) {
+      return { success: false, error: "Demasiadas operaciones. Intenta en unos segundos." };
+    }
+
     const questionId = formData.get("questionId")?.toString() || "";
     const bankId = formData.get("bankId")?.toString() || "";
     const question = formData.get("question")?.toString() || "";
@@ -192,6 +208,12 @@ export async function deleteQuestion(questionId: string, bankId: string): Promis
   try {
     const userId = await getAuthenticatedUser();
 
+    const ip = await getClientIp();
+    const allowed = await checkLimit(mutationLimiter, `${userId}:${ip}`);
+    if (!allowed) {
+      return { success: false, error: "Demasiadas operaciones. Intenta en unos segundos." };
+    }
+
     const question = await prisma.question.findUnique({
       where: { id: questionId },
       include: { bank: { select: { userId: true } } },
@@ -216,6 +238,12 @@ export async function deleteBank(bankId: string): Promise<ActionResult> {
   try {
     const userId = await getAuthenticatedUser();
 
+    const ip = await getClientIp();
+    const allowed = await checkLimit(mutationLimiter, `${userId}:${ip}`);
+    if (!allowed) {
+      return { success: false, error: "Demasiadas operaciones. Intenta en unos segundos." };
+    }
+
     const bank = await prisma.bank.findUnique({ where: { id: bankId }, select: { userId: true } });
     if (!bank || bank.userId !== userId) {
       return { success: false, error: "FORBIDDEN: No puedes eliminar este banco." };
@@ -233,6 +261,12 @@ export async function updateBank(bankId: string, formData: FormData): Promise<Ac
   try {
     const userId = await getAuthenticatedUser();
 
+    const ip = await getClientIp();
+    const allowed = await checkLimit(mutationLimiter, `${userId}:${ip}`);
+    if (!allowed) {
+      return { success: false, error: "Demasiadas operaciones. Intenta en unos segundos." };
+    }
+
     const bank = await prisma.bank.findUnique({ where: { id: bankId }, select: { userId: true } });
     if (!bank || bank.userId !== userId) {
       return { success: false, error: "FORBIDDEN: No puedes modificar este banco." };
@@ -240,15 +274,19 @@ export async function updateBank(bankId: string, formData: FormData): Promise<Ac
 
     const isPublic = formData.get("isPublic") === "true";
     const allowReviews = formData.get("allowReviews") === "true";
+    const allowRevealKey = formData.get("allowRevealKey") === "true";  
+    const timeLimit = Number(formData.get("timeLimit") || 0);          
     const maxAttempts = Number(formData.get("maxAttempts") || 0);
 
-    const validated = bankSettingsSchema.parse({ isPublic, allowReviews, maxAttempts });
+    const validated = bankSettingsSchema.parse({ isPublic, allowReviews, allowRevealKey, timeLimit, maxAttempts });
 
     await prisma.bank.update({
       where: { id: bankId },
       data: {
         isPublic: validated.isPublic,
         allowReviews: validated.allowReviews,
+        allowRevealKey: validated.allowRevealKey,
+        timeLimit: validated.timeLimit,
         maxAttempts: validated.maxAttempts,
       },
     });
@@ -258,6 +296,48 @@ export async function updateBank(bankId: string, formData: FormData): Promise<Ac
     return { success: true };
   } catch (error) {
     console.error("Error updating bank:", error);
+    return handleActionError(error);
+  }
+}
+
+export async function submitAttempt(
+  bankId: string,
+  score: number,
+  totalQ: number,
+  answeredQ: number,
+): Promise<ActionResult> {
+  try {
+    const userId = await getAuthenticatedUser();
+    
+    const ip = await getClientIp();
+    const allowed = await checkLimit(attemptLimiter, `${userId}:${ip}`);
+    if (!allowed) {
+      return { success: false, error: "Demasiados intentos registrados. Intenta más tarde." };
+    }
+
+    const bank = await prisma.bank.findUnique({
+      where: { id: bankId },
+      select: { maxAttempts: true },
+    });
+
+    if (!bank) return { success: false, error: "Banco no encontrado." };
+
+    if (bank.maxAttempts > 0) {
+      const previousAttempts = await prisma.attempt.count({
+        where: { bankId, userId },
+      });
+      if (previousAttempts >= bank.maxAttempts) {
+        return { success: false, error: "Has alcanzado el límite de intentos para este banco." };
+      }
+    }
+
+    await prisma.attempt.create({
+      data: { userId, bankId, score, totalQ, answeredQ },
+    });
+
+    revalidatePath(`/bank/${bankId}`);
+    return { success: true };
+  } catch (error) {
     return handleActionError(error);
   }
 }

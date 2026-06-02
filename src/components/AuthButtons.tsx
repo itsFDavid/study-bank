@@ -7,6 +7,12 @@ import Image from "next/image";
 export default function AuthButtons() {
   const { data: session, status } = useSession();
 
+  // Función para manejar el cierre de sesión y forzar la recarga
+  const handleLogout = async () => {
+    await signOut({ redirect: false });
+    window.location.href = "/";
+  };
+
   if (status === "loading") {
     return <div className="w-8 h-8 rounded-full bg-slate-100 animate-pulse" />;
   }
@@ -32,8 +38,9 @@ export default function AuthButtons() {
             {session.user.name}
           </span>
         </div>
+
         <button
-          onClick={() => signOut()}
+          onClick={handleLogout}
           className="text-slate-400 hover:text-rose-600 p-2 rounded-md hover:bg-rose-50/50 transition-colors"
           title="Sign Out"
         >

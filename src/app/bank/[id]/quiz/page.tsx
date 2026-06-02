@@ -53,6 +53,8 @@ export default async function QuizPage({ params }: PageProps) {
       isPublic: true,
       allowReviews: true,
       maxAttempts: true,
+      allowRevealKey: true,
+      timeLimit: true,
       userId: true,
       questions: {
         select: {
@@ -67,6 +69,35 @@ export default async function QuizPage({ params }: PageProps) {
 
   if (!bank) return notFound();
 
+  const attemptCount = await prisma.attempt.count({
+    where: { bankId: id, userId: currentUserId },
+  });
+
+  if (bank.maxAttempts > 0 && attemptCount >= bank.maxAttempts) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-8 bg-slate-50 text-center font-sans gap-4">
+        <div className="bg-white border border-slate-200 rounded-lg p-8 max-w-md w-full shadow-sm space-y-4">
+          <span className="text-[10px] font-bold font-mono tracking-widest text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 uppercase">
+            Acceso Bloqueado
+          </span>
+          <h1 className="text-lg font-bold text-slate-900 mt-2">
+            Límite de intentos alcanzado
+          </h1>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            Has utilizado todos los intentos disponibles para este banco de
+            preguntas ({bank.maxAttempts} de {bank.maxAttempts}).
+          </p>
+          <Link
+            href={`/bank/${bank.id}`}
+            className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700 border border-slate-300 px-4 py-2 rounded hover:bg-slate-50 transition-colors"
+          >
+            <ArrowLeft size={14} /> Volver al banco
+          </Link>
+        </div>
+      </div>
+    );
+  }
+  
   // Control de Acceso del Lado del Servidor (Cierre de seguridad estricto)
   const isOwner = bank.userId === currentUserId;
   if (!bank.isPublic && !isOwner) {
@@ -117,6 +148,8 @@ export default async function QuizPage({ params }: PageProps) {
         bankId={bank.id}
         allowReviews={bank.allowReviews}
         maxAttempts={bank.maxAttempts}
+        allowRevealKey={bank.allowRevealKey}
+        timeLimit={bank.timeLimit}
       />
     </div>
   );

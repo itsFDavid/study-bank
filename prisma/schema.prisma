@@ -19,6 +19,8 @@ model User {
   
   banks         Bank[]    // Bancos creados por este usuario
   reviews       Review[]  // Reseñas escritas por este usuario
+
+  attempts Attempt[] // Intentos realizados por este usuario
 }
 
 // El "Banco" de preguntas con configuraciones avanzadas del Autor
@@ -32,14 +34,30 @@ model Bank {
   allowReviews  Boolean    @default(true)  // Permitir comentarios y estrellas
   maxAttempts   Int        @default(0)     // 0 = Intentos ilimitados, >0 = Límite estricto
 
+  allowRevealKey Boolean    @default(true)    // Permitir revelar respuestas después de cada intento
+  timeLimit      Int        @default(0)      // minutos, 0 = sin límite
+
   userId        String     // ID del creador del banco
   author        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   questions     Question[] // Relación 1 a muchos con borrado en cascada
   reviews       Review[]   // Relación 1 a muchos para comentarios y ratings
+  attempts      Attempt[]  // Relación con intentos
   
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
+}
+
+model Attempt {
+  id          String   @id @default(cuid())
+  userId      String
+  bankId      String
+  score       Float    // porcentaje 0-100
+  totalQ      Int      // total de preguntas del quiz
+  answeredQ   Int      // respondidas antes de finalizar
+  completedAt DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bank        Bank     @relation(fields: [bankId], references: [id], onDelete: Cascade)
 }
 
 // La Pregunta individual (Se mantiene igual para no romper tus componentes)
@@ -69,4 +87,5 @@ model Review {
   bank      Bank     @relation(fields: [bankId], references: [id], onDelete: Cascade)
   
   createdAt DateTime @default(now())
+   updatedAt DateTime @updatedAt  
 }
