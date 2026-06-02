@@ -9,6 +9,7 @@ export interface ReviewData {
   rating: number;
   comment: string;
   createdAt: Date;
+  updatedAt: Date;
   user: UserInfo;
 }
 
@@ -26,6 +27,8 @@ export interface BankFullData {
   description: string | null;
   isPublic: boolean;
   allowReviews: boolean;
+  allowRevealKey: boolean; 
+  timeLimit: number;  
   maxAttempts: number;
   userId: string;
   questions: QuestionData[];

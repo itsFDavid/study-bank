@@ -14,6 +14,9 @@ import {
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import SubmitReviewForm from "./SubmitReviewForm";
+import { submitAttempt } from "@/app/actions";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 // Interfaces de tipos estrictos
 interface QuizQuestion {
@@ -28,6 +31,8 @@ interface QuizRunnerProps {
   bankId: string;
   allowReviews: boolean;
   maxAttempts: number;
+  allowRevealKey: boolean;
+  timeLimit: number;
 }
 
 interface CustomSessionUser {
@@ -39,6 +44,8 @@ export default function QuizRunner({
   bankId,
   allowReviews,
   maxAttempts,
+  allowRevealKey,
+  timeLimit,
 }: QuizRunnerProps) {
   const { data: session } = useSession();
   const user = session?.user as CustomSessionUser | undefined;
@@ -49,10 +56,11 @@ export default function QuizRunner({
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [userAnswers, setUserAnswers] = useState<Record<string, string[]>>({});
   const [isFinished, setIsFinished] = useState<boolean>(false);
-  const [attemptsCount, setAttemptsCount] = useState<number>(1);
 
   // Timer State (60 minutes = 3600 seconds)
-  const [timeRemaining, setTimeRemaining] = useState<number>(60 * 60);
+  const [timeRemaining, setTimeRemaining] = useState<number>(
+    timeLimit > 0 ? timeLimit * 60 : 0,
+  );
 
   const currentQuestion = questions[currentIndex];
   const progressPercentage = currentQuestion
@@ -60,23 +68,93 @@ export default function QuizRunner({
     : 100;
   const isMultiSelect = currentQuestion?.answers.length > 1;
 
+  const router = useRouter();
+  const [attemptSubmitted, setAttemptSubmitted] = useState<boolean>(false);
+  const [isSubmittingAttempt, setIsSubmittingAttempt] =
+    useState<boolean>(false);
+
+  const [finalScore, setFinalScore] = useState<number>(0);
+  const [finalCorrectCount, setFinalCorrectCount] = useState<number>(0);
+  const [reviewMode, setReviewMode] = useState<boolean>(false);
+
   // --- TIMER LOGIC ---
   useEffect(() => {
-    if (isFinished || !currentQuestion) return;
+    // Si no hay límite de tiempo o ya terminó, no iniciar timer
+    if (isFinished || timeLimit === 0) return;
 
-    const timerInterval = setInterval(() => {
+    const interval = setInterval(() => {
       setTimeRemaining((prev) => {
         if (prev <= 1) {
-          clearInterval(timerInterval);
-          setIsFinished(true); // Auto-submit when time runs out
+          clearInterval(interval);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
 
-    return () => clearInterval(timerInterval);
-  }, [isFinished, currentQuestion]);
+    return () => clearInterval(interval);
+  }, [isFinished, timeLimit]);
+
+  // Observador independiente para disparar el fin del examen cuando el tiempo llega a 0
+  useEffect(() => {
+    if (
+      timeLimit > 0 &&
+      timeRemaining === 0 &&
+      !isFinished &&
+      !isSubmittingAttempt
+    ) {
+      handleFinish(userAnswers);
+    }
+  }, [timeRemaining, isFinished, timeLimit, isSubmittingAttempt, userAnswers]);
+
+  const handleFinish = async (
+    finalAnswers: Record<string, string[]> = userAnswers,
+  ) => {
+    // Evitar múltiples ejecuciones simultáneas
+    if (isSubmittingAttempt || attemptSubmitted) return;
+
+    // 1. Bloquear la UI y finalizar el examen INMEDIATAMENTE de forma síncrona
+    setIsSubmittingAttempt(true);
+    setIsFinished(true);
+
+    const answeredQ = Object.keys(finalAnswers).length;
+    let correctCount = 0;
+    questions.forEach((q) => {
+      const u = finalAnswers[q.id] || [];
+      if (
+        u.length === q.answers.length &&
+        u.every((a) => q.answers.includes(a))
+      ) {
+        correctCount++;
+      }
+    });
+    const score = Math.round((correctCount / questions.length) * 100);
+
+    // 2. Guardar el puntaje en el estado para que la pantalla de resultados pueda renderizarse
+    setFinalScore(score);
+    setFinalCorrectCount(correctCount);
+
+    // 3. Enviar la petición asíncrona al servidor
+    const result = await submitAttempt(
+      bankId,
+      score,
+      questions.length,
+      answeredQ,
+    );
+
+    // 4. Manejar la respuesta del servidor
+    if (!result.success) {
+      toast.error(
+        result.error || "No se pudo registrar el intento en el historial.",
+      );
+      setIsSubmittingAttempt(false);
+      // El usuario ya está en la pantalla de resultados gracias al setIsFinished(true) superior
+      return;
+    }
+
+    setAttemptSubmitted(true);
+    setIsSubmittingAttempt(false);
+  };
 
   // Format seconds to MM:SS
   const formatTime = (seconds: number): string => {
@@ -98,7 +176,7 @@ export default function QuizRunner({
     }
   };
 
-  const handleNext = (): void => {
+  const handleNext = async (): Promise<void> => {
     if (!currentQuestion) return;
 
     const newAnswers = {
@@ -111,19 +189,21 @@ export default function QuizRunner({
       setCurrentIndex((prev) => prev + 1);
       setSelectedOptions([]);
     } else {
-      setIsFinished(true);
+      await handleFinish(newAnswers);
     }
   };
 
-  const handleRetake = (): void => {
-    if (maxAttempts > 0 && attemptsCount >= maxAttempts) return;
-
+  // --- HELPERS ---
+  const resetQuiz = () => {
     setCurrentIndex(0);
-    setSelectedOptions([]);
     setUserAnswers({});
+    setTimeRemaining(timeLimit > 0 ? timeLimit * 60 : 0);
     setIsFinished(false);
-    setTimeRemaining(60 * 60);
-    setAttemptsCount((prev) => prev + 1);
+    setFinalScore(0);
+    setFinalCorrectCount(0);
+    setReviewMode(false);
+    setIsSubmittingAttempt(false);
+    setAttemptSubmitted(false);
   };
 
   if (!currentQuestion && !isFinished) {
@@ -148,7 +228,6 @@ export default function QuizRunner({
 
     const score = Math.round((correctCount / questions.length) * 100);
     const passed = score >= 70;
-    const reachAttemptsLimit = maxAttempts > 0 && attemptsCount >= maxAttempts;
 
     return (
       <div className="max-w-5xl mx-auto py-12 px-6 font-sans space-y-8">
@@ -257,7 +336,7 @@ export default function QuizRunner({
                         </div>
 
                         {/* Correct Answer (Only show if wrong) */}
-                        {!isCorrect && (
+                        {!isCorrect && allowRevealKey && (
                           <div className="bg-white p-4 rounded border border-emerald-100 shadow-[0_0_0_1px_rgba(16,185,129,0.1)]">
                             <span className="text-[10px] font-bold text-emerald-600 uppercase block mb-2 tracking-wider">
                               Correct Key
@@ -276,6 +355,15 @@ export default function QuizRunner({
                             ))}
                           </div>
                         )}
+
+                        {!isCorrect && !allowRevealKey && (
+                          <div className="bg-slate-50 p-4 rounded border border-slate-200 flex items-center justify-center">
+                            <p className="text-xs text-slate-400 text-center">
+                              El autor ha deshabilitado la visualización de
+                              respuestas correctas.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -286,26 +374,34 @@ export default function QuizRunner({
 
           {/* FOOTER ACTIONS */}
           <div className="p-6 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row justify-center items-center gap-4">
-            <Link
-              href={`/bank/${bankId}`}
-              className="w-full sm:w-auto text-center px-6 py-2.5 border border-slate-300 bg-white text-slate-700 font-semibold rounded hover:bg-slate-50 transition-colors text-sm shadow-sm"
-            >
-              Return to Bank
-            </Link>
             <button
-              onClick={handleRetake}
-              disabled={reachAttemptsLimit}
+              onClick={() => {
+                if (attemptSubmitted) router.push(`/bank/${bankId}`);
+              }}
+              disabled={!attemptSubmitted}
               className={cn(
-                "w-full sm:w-auto px-6 py-2.5 text-white font-semibold rounded transition-colors text-sm flex items-center justify-center gap-2 shadow-sm",
-                reachAttemptsLimit
-                  ? "bg-slate-200 text-slate-400 cursor-not-allowed"
-                  : "bg-slate-900 hover:bg-slate-800",
+                "w-full sm:w-auto text-center px-6 py-2.5 border border-slate-300 bg-white text-slate-700 font-semibold rounded text-sm shadow-sm transition-colors",
+                attemptSubmitted
+                  ? "hover:bg-slate-50 cursor-pointer"
+                  : "opacity-50 cursor-not-allowed",
+              )}
+            >
+              {isSubmittingAttempt
+                ? "Guardando resultado..."
+                : "Return to Bank"}
+            </button>
+            <button
+              onClick={resetQuiz}
+              disabled={!attemptSubmitted}
+              className={cn(
+                "w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded text-sm font-semibold transition-colors shadow-sm",
+                attemptSubmitted
+                  ? "bg-slate-900 text-white hover:bg-slate-800 cursor-pointer"
+                  : "bg-slate-200 text-slate-400 cursor-not-allowed",
               )}
             >
               <RotateCcw size={16} />
-              {reachAttemptsLimit
-                ? "Attempts Limit Reached"
-                : `Retake Examination (${attemptsCount}/${maxAttempts || "∞"})`}
+              Retake Examination
             </button>
           </div>
         </div>
@@ -359,22 +455,28 @@ export default function QuizRunner({
 
         {/* COLUMNA DERECHA: Timer (Alineado al final) */}
         <div className="flex justify-end">
-          <div
-            className={cn(
-              "flex items-center gap-2 font-mono text-sm md:text-base font-medium px-3 py-1 rounded-md bg-slate-50 border border-slate-100",
-              timeRemaining < 300
-                ? "text-rose-600 bg-rose-50 border-rose-100"
-                : "text-slate-900",
-            )}
-          >
-            <Clock
-              size={16}
-              className={
-                timeRemaining < 300 ? "text-rose-500" : "text-slate-400"
-              }
-            />
-            {formatTime(timeRemaining)}
-          </div>
+          {timeLimit > 0 ? (
+            <div
+              className={cn(
+                "flex items-center gap-2 font-mono text-sm md:text-base font-medium px-3 py-1 rounded-md bg-slate-50 border border-slate-100",
+                timeRemaining < 60
+                  ? "text-rose-600 bg-rose-50 border-rose-100"
+                  : timeRemaining < 300
+                    ? "text-amber-600 bg-amber-50 border-amber-100"
+                    : "text-slate-900",
+              )}
+            >
+              <Clock
+                size={16}
+                className={
+                  timeRemaining < 60 ? "text-rose-500" : "text-slate-400"
+                }
+              />
+              {formatTime(timeRemaining)}
+            </div>
+          ) : (
+            <div /> // espacio vacío para mantener el grid de 3 columnas
+          )}
         </div>
       </div>
 

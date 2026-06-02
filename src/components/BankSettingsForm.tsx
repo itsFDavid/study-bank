@@ -10,6 +10,8 @@ interface BankSettingsFormProps {
   initialIsPublic: boolean;
   initialAllowReviews: boolean;
   initialMaxAttempts: number;
+  initialAllowRevealKey: boolean; 
+  initialTimeLimit: number;
 }
 
 export default function BankSettingsForm({
@@ -17,17 +19,27 @@ export default function BankSettingsForm({
   initialIsPublic,
   initialAllowReviews,
   initialMaxAttempts,
+  initialAllowRevealKey,
+  initialTimeLimit
 }: BankSettingsFormProps) {
   const [isPending, startTransition] = useTransition();
   const [isPublic, setIsPublic] = useState<boolean>(initialIsPublic);
   const [allowReviews, setAllowReviews] =
     useState<boolean>(initialAllowReviews);
+  
+  const [allowRevealKey, setAllowRevealKey] = 
+    useState<boolean>(initialAllowRevealKey);
+
+  const [timeLimit, setTimeLimit] = 
+    useState<number>(initialTimeLimit);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     formData.append("isPublic", isPublic.toString());
     formData.append("allowReviews", allowReviews.toString());
+    formData.append("allowRevealKey", allowRevealKey.toString());
+    formData.append("timeLimit", timeLimit.toString());
 
     startTransition(async () => {
       const toastId = toast.loading("Guardando configuración...");
@@ -107,6 +119,45 @@ export default function BankSettingsForm({
           max={100}
           className="w-20 bg-white border border-slate-300 text-sm px-2 py-1 rounded outline-none focus:border-slate-900 text-right text-slate-800 font-mono"
           required
+        />
+      </div>
+
+      {/* Toggle: Allow Reveal Key */}
+      <div className="flex items-center justify-between py-2 border-t border-slate-100">
+        <div className="flex flex-col gap-0.5">
+          <label className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+            <Eye size={16} className="text-slate-500" />
+            Mostrar Respuestas al Finalizar
+          </label>
+          <span className="text-xs text-slate-400">
+            Permite ver la clave correcta en la pantalla de resultados.
+          </span>
+        </div>
+        <input
+          type="checkbox"
+          checked={allowRevealKey}
+          onChange={(e) => setAllowRevealKey(e.target.checked)}
+          className="w-4 h-4 accent-slate-900 cursor-pointer"
+        />
+      </div>
+
+      {/* Input: Time Limit */}
+      <div className="flex items-center justify-between py-2 border-t border-slate-100 gap-4">
+        <div className="flex flex-col gap-0.5">
+          <label className="text-sm font-semibold text-slate-800">
+            Tiempo Límite (minutos)
+          </label>
+          <span className="text-xs text-slate-400">
+            0 equivale a tiempo ilimitado.
+          </span>
+        </div>
+        <input
+          type="number"
+          value={timeLimit}
+          onChange={(e) => setTimeLimit(Number(e.target.value))}
+          min={0}
+          max={300}
+          className="w-20 bg-white border border-slate-300 text-sm px-2 py-1 rounded outline-none focus:border-slate-900 text-right text-slate-800 font-mono"
         />
       </div>
 
