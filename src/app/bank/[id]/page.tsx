@@ -10,6 +10,7 @@ import ReviewSection from "@/components/ReviewSection";
 import QuestionForm from "@/components/QuestionForm";
 import QuestionItem from "@/components/QuestionItem";
 import BankPagination from "@/components/BankPagination";
+import DeleteBankButton from "@/components/DeleteBankButton";
 
 interface BankPageProps {
   params: Promise<{ id: string }>;
@@ -136,7 +137,11 @@ export default async function BankPage({
                 ID: {bankInfo.id}
               </p>
             </div>
-
+            {isOwner && (
+              <div className="flex items-center bg-white border border-slate-200 p-1.5 rounded-md shadow-sm">
+                <DeleteBankButton bankId={bankInfo.id} />
+              </div>
+            )}
             <div className="flex-1 overflow-y-auto">
               {isOwner && (
                 <div className="border-b border-slate-200">
@@ -145,8 +150,8 @@ export default async function BankPage({
                     initialIsPublic={bankInfo.isPublic}
                     initialAllowReviews={bankInfo.allowReviews}
                     initialMaxAttempts={bankInfo.maxAttempts}
-                    initialAllowRevealKey={bankInfo.allowRevealKey} 
-                    initialTimeLimit={bankInfo.timeLimit} 
+                    initialAllowRevealKey={bankInfo.allowRevealKey}
+                    initialTimeLimit={bankInfo.timeLimit}
                   />
                 </div>
               )}
