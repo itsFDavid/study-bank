@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Play, Lock } from "lucide-react";
+import { ChevronLeft, Play, Lock, Clock, Target, Eye } from "lucide-react";
 import BankSettingsForm from "@/components/BankSettingsForm";
 import ReviewSection from "@/components/ReviewSection";
 import QuestionForm from "@/components/QuestionForm";
@@ -143,7 +143,7 @@ export default async function BankPage({
               </div>
             )}
             <div className="flex-1 overflow-y-auto">
-              {isOwner && (
+              {isOwner ? (
                 <div className="border-b border-slate-200">
                   <BankSettingsForm
                     bankId={bankInfo.id}
@@ -154,7 +154,58 @@ export default async function BankPage({
                     initialTimeLimit={bankInfo.timeLimit}
                   />
                 </div>
+              ) : (
+                /* PANEL DE DETALLES (SOLO LECTURA) */
+                <div className="p-6 border-b border-slate-200 bg-white">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">
+                    Parámetros de Evaluación
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-100 rounded-md">
+                      <Clock className="text-blue-900" size={18} />
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Tiempo Límite
+                        </p>
+                        <p className="text-sm font-semibold text-slate-700">
+                          {bankInfo.timeLimit > 0
+                            ? `${bankInfo.timeLimit} minutos`
+                            : "Ilimitado"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-100 rounded-md">
+                      <Target className="text-blue-900" size={18} />
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Intentos
+                        </p>
+                        <p className="text-sm font-semibold text-slate-700">
+                          {bankInfo.maxAttempts > 0
+                            ? bankInfo.maxAttempts
+                            : "Infinitos"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-100 rounded-md">
+                      <Eye className="text-blue-900" size={18} />
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Clave Correcta
+                        </p>
+                        <p className="text-sm font-semibold text-slate-700">
+                          {bankInfo.allowRevealKey
+                            ? "Visible al final"
+                            : "Oculta"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               )}
+
               {/* ReviewSection siempre visible, con paginación interna */}
               <ReviewSection
                 reviews={bankInfo.reviews}
