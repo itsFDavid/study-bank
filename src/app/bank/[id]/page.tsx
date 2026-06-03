@@ -79,7 +79,7 @@ export default async function BankPage({
   // Sanitizar respuestas si no hay sesión — NUNCA llegan al cliente
   const sanitizedQuestions = questionsData.map((q) => ({
     ...q,
-    answers: hasSession ? q.answers : [], // array vacío, no null
+    answers: isOwner ? q.answers : [], // array vacío, no null
   }));
 
   return (

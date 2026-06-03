@@ -123,6 +123,7 @@ export default function QuestionItem({
         answers={question.answers}
         options={question.options}
         hasSession={hasSession}
+        isOwner={isOwner}
       />
     </div>
   );
