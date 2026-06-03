@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.itsfdavid.study.twa",
+        "sha256_cert_fingerprints": ["E1:0B:A6:50:C1:8A:45:0D:2A:94:C6:05:99:60:7A:04:D9:3B:9C:4E:94:5E:AA:C1:18:27:73:13:79:32:F4:77"]
+      }
+    }]
