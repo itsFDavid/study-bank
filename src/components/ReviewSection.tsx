@@ -91,101 +91,6 @@ export default function ReviewSection({
     setIsUpdating(false);
   };
 
-  {
-    paginated.map((review) => {
-      const isMyReview = currentUserId && review.user.id === currentUserId;
-      const isEditing = editingReviewId === review.id;
-
-      return (
-        <div
-          key={review.id}
-          className="p-4 bg-slate-50 border border-slate-100 rounded-md space-y-2 text-sm"
-        >
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              {/* avatar + nombre — igual que antes */}
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="text-xs font-mono font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">
-                {review.rating.toFixed(1)} ★
-              </div>
-              {/* Botones de editar/eliminar — solo para la reseña propia */}
-              {isMyReview && !isEditing && (
-                <div className="flex gap-1 ml-1">
-                  <button
-                    onClick={() => handleStartEdit(review)}
-                    className="p-1 text-slate-400 hover:text-blue-700 transition-colors"
-                    title="Editar reseña"
-                  >
-                    <Edit2 size={12} />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteReview(review.id)}
-                    className="p-1 text-slate-400 hover:text-rose-700 transition-colors"
-                    title="Eliminar reseña"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Modo edición inline */}
-          {isEditing ? (
-            <div className="space-y-2 pt-1">
-              {/* Selector de estrellas simplificado */}
-              <div className="flex gap-1">
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setEditRating(s)}
-                  >
-                    <Star
-                      size={16}
-                      className={
-                        s <= editRating
-                          ? "fill-amber-400 text-amber-400"
-                          : "text-slate-300"
-                      }
-                    />
-                  </button>
-                ))}
-              </div>
-              <textarea
-                value={editComment}
-                onChange={(e) => setEditComment(e.target.value)}
-                rows={2}
-                maxLength={1000}
-                className="w-full text-xs p-2 border border-slate-300 rounded resize-none outline-none focus:border-slate-900"
-              />
-              <div className="flex gap-2 justify-end">
-                <button
-                  onClick={() => setEditingReviewId(null)}
-                  className="text-xs text-slate-500 hover:text-slate-700 px-2 py-1"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => handleUpdateReview(review.id)}
-                  disabled={isUpdating || editComment.trim().length < 5}
-                  className="text-xs font-bold bg-slate-900 text-white px-3 py-1 rounded hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isUpdating ? "Guardando..." : "Guardar"}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <p className="text-slate-600 text-xs leading-relaxed whitespace-pre-wrap">
-              {review.comment}
-            </p>
-          )}
-        </div>
-      );
-    });
-  }
-
   return (
     <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm space-y-6">
       {/* Header con promedio */}
@@ -220,39 +125,115 @@ export default function ReviewSection({
       ) : (
         <>
           <div className="space-y-3">
-            {paginated.map((review) => (
-              <div
-                key={review.id}
-                className="p-4 bg-slate-50 border border-slate-100 rounded-md space-y-2 text-sm"
-              >
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    {review.user.image ? (
-                      <Image
-                        src={review.user.image}
-                        alt={review.user.name || "User"}
-                        width={20}
-                        height={20}
-                        className="rounded-full"
-                      />
-                    ) : (
-                      <div className="w-5 h-5 bg-slate-200 rounded-full flex items-center justify-center text-slate-400">
-                        <User size={10} />
+            {paginated.map((review) => {
+              const isMyReview =
+                currentUserId && review.user.id === currentUserId;
+              const isEditing = editingReviewId === review.id;
+
+              return (
+                <div
+                  key={review.id}
+                  className="p-4 bg-slate-50 border border-slate-100 rounded-md space-y-2 text-sm"
+                >
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      {review.user.image ? (
+                        <Image
+                          src={review.user.image}
+                          alt={review.user.name || "User"}
+                          width={20}
+                          height={20}
+                          className="rounded-full"
+                        />
+                      ) : (
+                        <div className="w-5 h-5 bg-slate-200 rounded-full flex items-center justify-center text-slate-400">
+                          <User size={10} />
+                        </div>
+                      )}
+                      <span className="font-semibold text-slate-700 text-xs">
+                        {review.user.name || "Estudiante Anónimo"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs font-mono font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">
+                        {review.rating.toFixed(1)} ★
                       </div>
-                    )}
-                    <span className="font-semibold text-slate-700 text-xs">
-                      {review.user.name || "Estudiante Anónimo"}
-                    </span>
+                      {/* Botones de editar/eliminar — solo para la reseña propia */}
+                      {isMyReview && !isEditing && (
+                        <div className="flex gap-1 ml-1">
+                          <button
+                            onClick={() => handleStartEdit(review)}
+                            className="p-1 text-slate-400 hover:text-blue-700 transition-colors"
+                            title="Editar reseña"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteReview(review.id)}
+                            className="p-1 text-slate-400 hover:text-rose-700 transition-colors"
+                            title="Eliminar reseña"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1 text-xs font-mono font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">
-                    {review.rating.toFixed(1)} ★
-                  </div>
+
+                  {/* Modo edición inline */}
+                  {isEditing ? (
+                    <div className="space-y-2 pt-1">
+                      {/* Selector de estrellas simplificado */}
+                      <div className="flex gap-1">
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => setEditRating(s)}
+                          >
+                            <Star
+                              size={16}
+                              className={
+                                s <= editRating
+                                  ? "fill-amber-400 text-amber-400"
+                                  : "text-slate-300"
+                              }
+                            />
+                          </button>
+                        ))}
+                      </div>
+                      <textarea
+                        value={editComment}
+                        onChange={(e) => setEditComment(e.target.value)}
+                        rows={2}
+                        maxLength={1000}
+                        className="w-full text-xs p-2 border border-slate-300 rounded resize-none outline-none focus:border-slate-900"
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <button
+                          onClick={() => setEditingReviewId(null)}
+                          className="text-xs text-slate-500 hover:text-slate-700 px-2 py-1"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          onClick={() => handleUpdateReview(review.id)}
+                          disabled={isUpdating || editComment.trim().length < 5}
+                          className="text-xs font-bold bg-slate-900 text-white px-3 py-1 rounded hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isUpdating ? "Guardando..." : "Guardar"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-slate-600 text-xs leading-relaxed whitespace-pre-wrap">
+                      {review.comment}
+                    </p>
+                  )}
                 </div>
-                <p className="text-slate-600 text-xs leading-relaxed whitespace-pre-wrap">
-                  {review.comment}
-                </p>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Paginación */}
