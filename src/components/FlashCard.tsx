@@ -8,6 +8,7 @@ interface FlashCardProps {
   answers: string[];
   options: string[];
   hasSession?: boolean;
+  isOwner?: boolean;
 }
 
 export default function FlashCard({
@@ -15,6 +16,7 @@ export default function FlashCard({
   answers,
   options,
   hasSession = true,
+  isOwner = false,
 }: FlashCardProps) {
   const [showAnswer, setShowAnswer] = useState<boolean>(false);
   // Si no hay sesión, answers llega [] desde el servidor — nunca hay datos reales que ocultar
@@ -87,7 +89,7 @@ export default function FlashCard({
           ID: {cardId.slice(-6)}
         </div>
 
-        {hasSession ? (
+        {isOwner ? (
           <button
             onClick={() => setShowAnswer(!showAnswer)}
             className="text-xs font-bold text-blue-900 hover:text-blue-700 flex items-center gap-1.5 uppercase tracking-wide"
@@ -102,11 +104,11 @@ export default function FlashCard({
               </>
             )}
           </button>
-        ) : (
+        ) : !hasSession ? (
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1 cursor-not-allowed">
             <Lock size={12} /> Key Locked
           </span>
-        )}
+        ) : null}
       </div>
     </div>
   );
